@@ -72,17 +72,14 @@ export function Welcome() {
     return (
       <Screen back={false}>
         <Brand />
-        <div className="mt-10">
-          <CurieAvatar size={56} />
-        </div>
         <Question>
-          <span className="text-[26px]">Build your CV, one small step at a time</span>
+          <span className="mt-10 block text-[26px]">Build your CV, one small step at a time</span>
         </Question>
         <Hint className="text-[15px]">
           9 short sections. When you're done, Curie will review your CV and tell you how to make it better.
         </Hint>
         <ul className="mt-6 space-y-2 text-[15px]">
-          {["Takes about 20 minutes", "Your answers are saved on this phone", "Works even if you have no work experience"].map((t) => (
+          {["Takes about 20 minutes", "Works even if you have no work experience"].map((t) => (
             <li key={t} className="flex items-center gap-2.5">
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-secondary text-[11px] text-white">✓</span>
               {t}
@@ -117,17 +114,30 @@ export function Welcome() {
   }
 
   const latest = latestSubmission(state);
-  const done = SECTIONS.filter((d) => buildSteps(state).some((st) => st.key === `${d.id}.check`) && sectionIssues(state, d.id).length === 0);
+  const stepKeys = new Set(steps.map((st) => st.key));
+  const doneIds = new Set(SECTIONS.filter((d) => stepKeys.has(`${d.id}.check`) && sectionIssues(state, d.id).length === 0).map((d) => d.id));
   const resume = state.lastStep && steps.some((s) => s.key === state.lastStep) ? state.lastStep : steps[0].key;
+  // Phones are often shared, so say whose CV this is and make "not me" easy.
+  const owner = (state.user?.name || state.data.personalInfo.fullName).trim().split(/\s+/)[0];
+  const notMe = async () => {
+    const whose = owner ? `${owner}'s CV` : "This CV";
+    const warning = state.user
+      ? `${whose} is saved in ${owner || "their"} account. It will be removed from this phone.`
+      : `${whose} will be removed from this phone. It hasn't been saved to an account.`;
+    if (!window.confirm(`${warning} Start a new CV?`)) return;
+    if (state.user) await signOut();
+    else {
+      clearState();
+      update(initialState());
+    }
+    navigate("/", { replace: true });
+  };
 
   return (
     <Screen back={false}>
       <Brand />
-      <div className="mt-8">
-        <CurieAvatar size={56} />
-      </div>
       <Question>
-        <span className="text-[24px]">Welcome back{state.user?.name ? `, ${state.user.name.split(" ")[0]}` : ""}!</span>
+        <span className="mt-8 block text-[24px]">Welcome back{owner ? `, ${owner}` : ""}!</span>
       </Question>
       {latest && !latest.review && <Hint className="text-[15px]">Curie is reviewing your CV.</Hint>}
       {latest?.review && (
@@ -138,17 +148,19 @@ export function Welcome() {
       {!latest && (
         <>
           <Hint className="text-[15px]">
-            You've finished {done.length} of {SECTIONS.length} sections.
+            You've finished {doneIds.size} of {SECTIONS.length} sections.
           </Hint>
-          <div className="mt-4 space-y-2">
-            {done.map((d) => (
-              <div key={d.id} className="flex items-center gap-3 rounded-xl border border-slate-200 px-3.5 py-2.5 text-[15px]">
-                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-secondary text-[11px] text-white">✓</span>
-                {d.label}
-              </div>
+          <div className="mt-3 flex gap-1" aria-hidden>
+            {SECTIONS.map((d) => (
+              <div key={d.id} className={`h-1.5 flex-1 rounded-full ${doneIds.has(d.id) ? "bg-secondary" : "bg-slate-200"}`} />
             ))}
           </div>
         </>
+      )}
+      {!state.user && (
+        <p className="mt-5 rounded-xl bg-[#eef3f8] px-3.5 py-3 text-sm text-primary">
+          Using a shared phone? Sign in with Google so your CV is saved to your account, not just this phone.
+        </p>
       )}
       <Actions>
         {latest ? (
@@ -157,22 +169,16 @@ export function Welcome() {
           </BigButton>
         ) : (
           <BigButton tone="green" onClick={() => goStep(resume)}>
-            Continue where I left off
+            {owner ? `Continue as ${owner}` : "Continue where I left off"}
           </BigButton>
         )}
-        <LinkButton onClick={() => navigate("/cv")}>See my CV so far</LinkButton>
-        <LinkButton
-          className="text-slate-500"
-          onClick={() => {
-            if (window.confirm("Start a new CV? Your current answers on this phone will be cleared.")) {
-              clearState();
-              update(initialState());
-              navigate("/");
-            }
-          }}
-        >
-          Start a new CV
-        </LinkButton>
+        {!state.user && (
+          <BigButton tone="outline" className="mt-2.5" busy={google.busy} onClick={() => google.start("/", () => navigate("/"))}>
+            <GoogleMark /> Sign in with Google to save it
+          </BigButton>
+        )}
+        {google.error && <p className="mt-2 text-center text-sm text-[#854F0B]">{google.error}</p>}
+        <LinkButton onClick={notMe}>{owner ? `I'm not ${owner}: start a new CV` : "Start a new CV"}</LinkButton>
       </Actions>
     </Screen>
   );

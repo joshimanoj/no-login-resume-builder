@@ -214,3 +214,20 @@ test.describe("on a laptop", () => {
     await expect(page.getByText("Your CV so far · Shaded Headers")).toBeVisible();
   });
 });
+
+test("on a shared phone, another student can clear the previous CV", async ({ page }) => {
+  await page.goto("/demo");
+  await expect(page).toHaveURL(/\/$/);
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem("guided-cv-v1") ?? "{}");
+    localStorage.setItem("guided-cv-v1", JSON.stringify({ ...saved, lastStep: "education.0.degree" }));
+  });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Welcome back, Asha!" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Continue as Asha" })).toBeVisible();
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "I'm not Asha: start a new CV" }).click();
+  await expect(page.getByRole("button", { name: "Let's start" })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("guided-cv-v1") ?? "")).not.toContain("Asha");
+});
