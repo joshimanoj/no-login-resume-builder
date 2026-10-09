@@ -42,7 +42,7 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   await tap(page, "Let's start");
 
   // 1. Personal Information
-  await tap(page, "Okay");
+  await tap(page, "Start this section");
   await answer(page, "asha rao");
   await answer(page, "asha.rao@gmail.com");
   await answer(page, "98765 43210");
@@ -60,7 +60,7 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   await tap(page, "Continue to Education");
 
   // 2. Education: current degree, then Class 12 and Class 10 from the add-another screen
-  await tap(page, "Okay");
+  await tap(page, "Start this section");
   await tap(page, "B.Sc.");
   await tap(page, "Physics");
   await answer(page, "K.T.H.M. College");
@@ -100,7 +100,7 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   await tap(page, "Continue to Skills");
 
   // 4. Skills: tools from her answers are suggested; pick only 3 so Curie asks for more
-  await tap(page, "Okay");
+  await tap(page, "Start this section");
   for (const skill of ["HTML", "CSS", "Git"]) await page.getByRole("button", { name: skill, exact: true }).first().click();
   await next(page);
   await page.getByRole("radio", { name: "Advanced" }).first().click();
@@ -164,7 +164,7 @@ test("the demo opens on the landing page, pre-filled", async ({ page }) => {
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("button", { name: /Sign in with Google to save your CV/ })).toBeVisible();
   await page.getByRole("button", { name: "Let's start" }).click();
-  await page.getByRole("button", { name: "Okay" }).click();
+  await page.getByRole("button", { name: "Start this section" }).click();
   await expect(page.getByRole("textbox")).toHaveValue("Asha Rao");
 });
 

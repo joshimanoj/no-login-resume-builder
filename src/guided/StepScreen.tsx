@@ -1,10 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, Maximize2, Minimize2, Plus, X } from "lucide-react";
+import {
+  Award,
+  BadgeCheck,
+  BookOpen,
+  Briefcase,
+  ChevronLeft,
+  ChevronRight,
+  FolderKanban,
+  GraduationCap,
+  Maximize2,
+  Minimize2,
+  Plus,
+  Star,
+  Trophy,
+  User,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { TEMPLATE_IDS, TEMPLATE_NAMES, templateSupportsPhoto, type TemplateId } from "@/utils/templates";
 import { useGuided } from "./GuidedContext";
-import { SECTIONS, isUnderReview, sectionDef, sectionNumber, type GuidedState, type ListSection, type SectionId } from "./state";
+import { SECTIONS, hasEnteredAnything, isUnderReview, sectionDef, sectionNumber, type GuidedState, type ListSection, type SectionId } from "./state";
 import {
   addItem,
   bulletsToHtml,
@@ -21,7 +38,7 @@ import {
 } from "./steps";
 import { sectionIssues } from "./checks";
 import { CvPreview } from "./screens";
-import { demoState } from "./demo";
+import { EXAMPLE_CV } from "./demo";
 import { paragraphToHtml } from "@/utils/plainText";
 import {
   Actions,
@@ -77,8 +94,6 @@ function TrackedStep({ step, bar, label }: { step: Step; bar: { total: number; c
   );
 }
 
-const EXAMPLE_CV = demoState().data;
-
 /** Desktop only: the CV filling in beside the questions, with a full-width document view. */
 function LivePreview() {
   const { state, update } = useGuided();
@@ -89,7 +104,7 @@ function LivePreview() {
   const step = (by: number) => update((s) => ({ ...s, template: TEMPLATE_IDS[(index + by + TEMPLATE_IDS.length) % TEMPLATE_IDS.length] }));
   // Until she has written something, show the look with an example CV so it isn't an empty page.
   const d = state.data;
-  const hasContent = Boolean(d.personalInfo.fullName.trim() || d.education.length || d.experience.length);
+  const hasContent = hasEnteredAnything(d);
   const cv = hasContent ? d : EXAMPLE_CV;
 
   useEffect(() => {
@@ -236,16 +251,30 @@ function IntroStep({ step }: { step: StepOf<"intro"> }) {
     advance(s, step.key);
   };
 
+  const Icon = SECTION_ICONS[sec];
   return (
     <>
-      <Spacer />
+      <span className="mt-5 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#eef3f8] text-primary">
+        <Icon className="h-6 w-6" aria-hidden />
+      </span>
       <Question>
-        <span className="text-[26px]">{def.label}</span>
+        <span className="mt-1 block text-[28px]">{def.label}</span>
       </Question>
       <Hint className="text-[15px]">{def.intro}</Hint>
+      <div className="mt-6 rounded-2xl border border-slate-200 p-4">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">In this section</p>
+        <ul className="mt-2.5 space-y-2 text-[15px] text-slate-700">
+          {def.covers.map((item) => (
+            <li key={item} className="flex items-start gap-2.5">
+              <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-secondary" aria-hidden />
+              {item}
+            </li>
+          ))}
+        </ul>
+      </div>
       {def.ask ? (
         <>
-          <p className="mt-7 text-lg font-medium">{def.ask}</p>
+          <p className="mt-6 text-lg font-medium">{def.ask}</p>
           <div className="mt-3 space-y-2.5">
             <Option selected={answer === true} onClick={yes} className="justify-center text-center">
               Yes
@@ -257,15 +286,25 @@ function IntroStep({ step }: { step: StepOf<"intro"> }) {
           <Spacer />
         </>
       ) : (
-        <>
-          <Actions>
-            <BigButton onClick={() => advance(start(state), step.key)}>Okay</BigButton>
-          </Actions>
-        </>
+        <Actions>
+          <BigButton onClick={() => advance(start(state), step.key)}>Start this section</BigButton>
+        </Actions>
       )}
     </>
   );
 }
+
+const SECTION_ICONS: Record<SectionId, LucideIcon> = {
+  personal: User,
+  education: GraduationCap,
+  experience: Briefcase,
+  skills: Star,
+  projects: FolderKanban,
+  achievements: Trophy,
+  awards: Award,
+  certifications: BadgeCheck,
+  publications: BookOpen,
+};
 
 // ---------- text ----------
 

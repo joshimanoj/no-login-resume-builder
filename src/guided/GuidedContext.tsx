@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { clearState, initialState, loadState, saveState, type GuidedState } from "./state";
+import { clearState, hasEnteredAnything, initialState, loadState, saveState, type GuidedState } from "./state";
 import { buildSteps } from "./steps";
 import { pullCv, pullSubmissions, pushCv, signOut as backendSignOut, usingMock, watchUser } from "./backend";
 
@@ -24,7 +24,7 @@ export const stepPath = (key: string) => `/s/${key}`;
 const SYNCED = ["data", "template", "answers", "prompts", "improved"] as const;
 const contentChanged = (a: GuidedState, b: GuidedState) => SYNCED.some((k) => a[k] !== b[k]);
 const syncedJson = (s: GuidedState) => JSON.stringify(SYNCED.map((k) => s[k]));
-const hasContent = (s: GuidedState) => Boolean(s.lastStep || s.submissions.length || s.data.personalInfo.fullName);
+const hasContent = (s: GuidedState) => s.submissions.length > 0 || hasEnteredAnything(s.data);
 
 export function GuidedProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GuidedState>(loadState);

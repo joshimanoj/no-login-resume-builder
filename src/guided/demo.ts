@@ -85,3 +85,6 @@ export function demoState(): GuidedState {
   };
   return s;
 }
+
+/** The sample CV shown as an example before a student has written anything. */
+export const EXAMPLE_CV = demoState().data;

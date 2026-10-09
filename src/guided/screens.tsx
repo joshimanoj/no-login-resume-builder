@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileDown, MessageSquareText, Sparkles } from "lucide-react";
 import { ResumePreview } from "@/components/ResumePreview";
 import { ResumeForm } from "@/components/ResumeForm";
 import { PhotoCropDialog } from "@/components/PhotoCropDialog";
@@ -11,11 +11,13 @@ import { storeResumeData } from "@/utils/resumeStorage";
 import { applyTitleCaseName, type ResumeData } from "@/utils/resumeRules";
 import { TEMPLATE_IDS, TEMPLATE_NAMES, templateSupportsPhoto, type TemplateId } from "@/utils/templates";
 import { stepPath, useGuided } from "./GuidedContext";
+import { EXAMPLE_CV } from "./demo";
 import {
   MAX_ATTEMPTS,
   SECTIONS,
   attemptsLeft,
   clearState,
+  hasEnteredAnything,
   initialState,
   isAccepted,
   isAcceptedAndUnchanged,
@@ -59,7 +61,27 @@ function useGoogleSignIn() {
 
 // ---------- welcome ----------
 
-const hasStarted = (s: GuidedState) => Boolean(s.lastStep) || s.submissions.length > 0;
+const HOW_IT_WORKS = [
+  { icon: MessageSquareText, title: "Answer simple questions", text: "9 short sections, one question at a time." },
+  { icon: Sparkles, title: "Curie reviews your CV", text: "Get stars and tips for each section, then improve it." },
+  { icon: FileDown, title: "Download a polished CV", text: "Pick a look and download it as PDF or Word." },
+];
+
+/** Desktop landing page: show the result straight away. */
+function ExampleCvPanel() {
+  const { state } = useGuided();
+  return (
+    <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <p className="mb-3 shrink-0 text-sm font-medium text-slate-600">What you'll make: an example CV</p>
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <CvPreview data={EXAMPLE_CV} template={state.template} />
+      </div>
+    </div>
+  );
+}
+
+/** Something worth coming back to: she has been through the questions and entered something, or submitted. */
+const hasStarted = (s: GuidedState) => s.submissions.length > 0 || (Boolean(s.lastStep) && hasEnteredAnything(s.data));
 
 export function Welcome() {
   const { state, update, goStep, signOut } = useGuided();
@@ -70,22 +92,28 @@ export function Welcome() {
 
   if (!hasStarted(state)) {
     return (
-      <Screen back={false}>
+      <Screen back={false} aside={<ExampleCvPanel />}>
         <Brand />
         <Question>
-          <span className="mt-10 block text-[26px]">Build your CV, one small step at a time</span>
+          <span className="mt-8 block text-[26px] md:mt-4 md:text-[28px]">Build your CV, one small step at a time</span>
         </Question>
-        <Hint className="text-[15px]">
-          9 short sections. When you're done, Curie will review your CV and tell you how to make it better.
-        </Hint>
-        <ul className="mt-6 space-y-2 text-[15px]">
-          {["Takes about 20 minutes", "Works even if you have no work experience"].map((t) => (
-            <li key={t} className="flex items-center gap-2.5">
-              <span className="flex h-5 w-5 items-center justify-center rounded-full bg-secondary text-[11px] text-white">✓</span>
-              {t}
+        <Hint className="text-[15px]">About 20 minutes. Works even if you have no work experience.</Hint>
+        <p className="mt-7 text-xs font-medium uppercase tracking-wide text-slate-500">How it works</p>
+        <ol className="mt-3 space-y-4">
+          {HOW_IT_WORKS.map(({ icon: Icon, title, text }, k) => (
+            <li key={title} className="flex gap-3.5">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#eef3f8] text-primary">
+                <Icon className="h-5 w-5" aria-hidden />
+              </span>
+              <span>
+                <span className="block text-[15px] font-medium text-slate-900">
+                  {k + 1}. {title}
+                </span>
+                <span className="block text-sm text-slate-500">{text}</span>
+              </span>
             </li>
           ))}
-        </ul>
+        </ol>
         <Actions>
           <BigButton tone="green" onClick={() => goStep(steps[0].key)}>
             Let's start
