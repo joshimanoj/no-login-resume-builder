@@ -10,6 +10,18 @@ export const TEMPLATE_IDS = [
   "sidebar",
 ] as const;
 
+export const TEMPLATE_NAMES: Record<TemplateId, string> = {
+  "resumake-classic": "Classic",
+  "resumake-classic-single": "Shaded Headers",
+  modern: "Modern",
+  classic: "Traditional",
+  minimal: "Minimal",
+  professional: "Professional",
+  creative: "Creative",
+  executive: "Executive",
+  sidebar: "Sidebar",
+};
+
 export const PHOTO_TEMPLATE_IDS = ["modern", "classic", "creative", "executive", "sidebar"] as const;
 
 export type TemplateId = (typeof TEMPLATE_IDS)[number];

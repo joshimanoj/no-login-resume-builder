@@ -4,7 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
+import GuidedApp from "./guided/GuidedApp";
 
 const queryClient = new QueryClient();
 
@@ -15,9 +15,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <Routes>
-          <Route path="/" element={<Index />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
+          {/* The original single-page builder, kept for comparison and its e2e tests. */}
+          <Route path="/classic" element={<Index />} />
+          <Route path="/*" element={<GuidedApp />} />
         </Routes>
       </BrowserRouter>
     </TooltipProvider>

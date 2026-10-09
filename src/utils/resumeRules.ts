@@ -243,78 +243,88 @@ export function isChecklistComplete(answers: ChecklistAnswer[]): boolean {
   );
 }
 
-export function validateResumeData(data: ResumeData): { valid: boolean; message?: string } {
+/** Section validators: each returns the first problem in that section, or null. */
+export function validatePersonal(data: ResumeData): string | null {
   const p = data.personalInfo;
-  if (!p.fullName?.trim()) return { valid: false, message: "Please add your name before downloading." };
+  if (!p.fullName?.trim()) return "Please add your name before downloading.";
   if (!isTitleCase(p.fullName)) {
-    return { valid: false, message: "Full Name must be in Title Case (e.g. John Doe)." };
+    return "Full Name must be in Title Case (e.g. John Doe).";
   }
-  if (!p.email?.trim()) return { valid: false, message: "Please add your email address before downloading." };
-  if (!p.phone?.trim()) return { valid: false, message: "Please add your phone number before downloading." };
-  if (!p.location?.trim()) return { valid: false, message: "Please add your location before downloading." };
+  if (!p.email?.trim()) return "Please add your email address before downloading.";
+  if (!p.phone?.trim()) return "Please add your phone number before downloading.";
+  if (!p.location?.trim()) return "Please add your location before downloading.";
   if (isRichTextEmpty(p.summary)) {
-    return { valid: false, message: "Please add your Professional Summary before downloading." };
+    return "Please add your Professional Summary before downloading.";
   }
+  return null;
+}
 
+export function validateEducation(data: ResumeData): string | null {
   for (let i = 0; i < data.education.length; i++) {
     const edu = data.education[i];
     const n = i + 1;
-    if (!edu.school?.trim()) return { valid: false, message: `Education ${n}: School/University is required.` };
-    if (!edu.degree?.trim()) return { valid: false, message: `Education ${n}: Degree is required.` };
-    if (!edu.field?.trim()) return { valid: false, message: `Education ${n}: Field of study is required.` };
-    if (!edu.location?.trim()) return { valid: false, message: `Education ${n}: Location is required.` };
-    if (!edu.startDate) return { valid: false, message: `Education ${n}: Start date is required.` };
+    if (!edu.school?.trim()) return `Education ${n}: School/University is required.`;
+    if (!edu.degree?.trim()) return `Education ${n}: Degree is required.`;
+    if (!edu.field?.trim()) return `Education ${n}: Field of study is required.`;
+    if (!edu.location?.trim()) return `Education ${n}: Location is required.`;
+    if (!edu.startDate) return `Education ${n}: Start date is required.`;
     if (!edu.current && !edu.endDate) {
-      return { valid: false, message: `Education ${n}: End date is required (or mark as ongoing).` };
+      return `Education ${n}: End date is required (or mark as ongoing).`;
     }
     const score = edu.gpa?.trim() || "";
     if (score && !edu.scoreType) {
-      return { valid: false, message: `Education ${n}: Select Percentage or GPA (out of 10).` };
+      return `Education ${n}: Select Percentage or GPA (out of 10).`;
     }
     if (edu.scoreType && !score) {
-      return { valid: false, message: `Education ${n}: Enter your ${edu.scoreType === "percentage" ? "percentage" : "GPA (out of 10)"}.` };
+      return `Education ${n}: Enter your ${edu.scoreType === "percentage" ? "percentage" : "GPA (out of 10)"}.`;
     }
     if (score) {
       const num = parseScoreNumber(score);
-      if (num === null) return { valid: false, message: `Education ${n}: Score must be a number.` };
+      if (num === null) return `Education ${n}: Score must be a number.`;
       if (edu.scoreType === "gpa" && (num <= 0 || num > 10)) {
-        return { valid: false, message: `Education ${n}: GPA must be a number greater than 0 and at most 10.` };
+        return `Education ${n}: GPA must be a number greater than 0 and at most 10.`;
       }
       if (edu.scoreType === "percentage" && (num < 0 || num > 100)) {
-        return { valid: false, message: `Education ${n}: Percentage must be between 0 and 100.` };
+        return `Education ${n}: Percentage must be between 0 and 100.`;
       }
     }
   }
+  return null;
+}
 
+export function validateSkills(data: ResumeData): string | null {
   const namedSkills = data.skills.filter((skill) => skill.name?.trim());
   if (namedSkills.length < 2) {
-    return { valid: false, message: "Please add at least 2 skills (one skill per box) before downloading." };
+    return "Please add at least 2 skills (one skill per box) before downloading.";
   }
   for (let i = 0; i < data.skills.length; i++) {
     const skill = data.skills[i];
     if (!skill.name?.trim() && data.skills.length > 0 && namedSkills.length < data.skills.length) {
-      return { valid: false, message: `Skill ${i + 1}: Enter a skill name, or remove the empty box.` };
+      return `Skill ${i + 1}: Enter a skill name, or remove the empty box.`;
     }
   }
+  return null;
+}
 
+export function validateExperience(data: ResumeData): string | null {
   for (let i = 0; i < data.experience.length; i++) {
     const exp = data.experience[i];
     const n = i + 1;
     if (!exp.experienceType) {
-      return { valid: false, message: `Experience ${n}: Choose Internship or Job.` };
+      return `Experience ${n}: Choose Internship or Job.`;
     }
-    if (!exp.company?.trim()) return { valid: false, message: `Experience ${n}: Company is required.` };
-    if (!exp.position?.trim()) return { valid: false, message: `Experience ${n}: Position is required.` };
-    if (!exp.location?.trim()) return { valid: false, message: `Experience ${n}: Location is required.` };
-    if (!exp.startDate) return { valid: false, message: `Experience ${n}: Start date is required.` };
+    if (!exp.company?.trim()) return `Experience ${n}: Company is required.`;
+    if (!exp.position?.trim()) return `Experience ${n}: Position is required.`;
+    if (!exp.location?.trim()) return `Experience ${n}: Location is required.`;
+    if (!exp.startDate) return `Experience ${n}: Start date is required.`;
     if (!exp.current && !exp.endDate) {
-      return { valid: false, message: `Experience ${n}: End date is required (or mark as currently working).` };
+      return `Experience ${n}: End date is required (or mark as currently working).`;
     }
     if (isFutureDate(exp.startDate)) {
-      return { valid: false, message: `Experience ${n}: Start date cannot be in the future.` };
+      return `Experience ${n}: Start date cannot be in the future.`;
     }
     if (exp.endDate && isFutureDate(exp.endDate)) {
-      return { valid: false, message: `Experience ${n}: End date cannot be in the future.` };
+      return `Experience ${n}: End date cannot be in the future.`;
     }
     if (exp.experienceType === "job") {
       const jobRange = dateRange(exp.startDate, exp.endDate, exp.current);
@@ -323,35 +333,54 @@ export function validateResumeData(data: ResumeData): { valid: boolean; message?
           const edu = data.education[j];
           const eduRange = dateRange(edu.startDate, edu.endDate, edu.current);
           if (eduRange && rangesOverlap(jobRange, eduRange)) {
-            return {
-              valid: false,
-              message: `Experience ${n}: Job dates overlap with Education ${j + 1}. Use Internship if this was during studies, or correct the dates.`,
-            };
+            return `Experience ${n}: Job dates overlap with Education ${j + 1}. Use Internship if this was during studies, or correct the dates.`;
           }
         }
       }
     }
   }
+  return null;
+}
 
+export function validateAwards(data: ResumeData): string | null {
   const awards = data.awards ?? [];
   for (let i = 0; i < awards.length; i++) {
     const award = awards[i];
     const n = i + 1;
-    if (!award.title?.trim()) return { valid: false, message: `Award ${n}: Title is required.` };
-    if (!award.issuer?.trim()) return { valid: false, message: `Award ${n}: Issuer is required.` };
-    if (!award.date) return { valid: false, message: `Award ${n}: Date is required.` };
+    if (!award.title?.trim()) return `Award ${n}: Title is required.`;
+    if (!award.issuer?.trim()) return `Award ${n}: Issuer is required.`;
+    if (!award.date) return `Award ${n}: Date is required.`;
     if (isRichTextEmpty(award.description)) {
-      return { valid: false, message: `Award ${n}: Description is required.` };
+      return `Award ${n}: Description is required.`;
     }
   }
+  return null;
+}
 
+export function validateCertifications(data: ResumeData): string | null {
   const certs = data.certifications ?? [];
   for (let i = 0; i < certs.length; i++) {
     const cert = certs[i];
-    if (!cert.name?.trim()) return { valid: false, message: `Certification ${i + 1}: Name is required.` };
-    if (!cert.issuer?.trim()) return { valid: false, message: `Certification ${i + 1}: Issuer is required.` };
-    if (!cert.date) return { valid: false, message: `Certification ${i + 1}: Issue date is required.` };
+    if (!cert.name?.trim()) return `Certification ${i + 1}: Name is required.`;
+    if (!cert.issuer?.trim()) return `Certification ${i + 1}: Issuer is required.`;
+    if (!cert.date) return `Certification ${i + 1}: Issue date is required.`;
   }
+  return null;
+}
 
+export const SECTION_VALIDATORS = [
+  validatePersonal,
+  validateEducation,
+  validateSkills,
+  validateExperience,
+  validateAwards,
+  validateCertifications,
+] as const;
+
+export function validateResumeData(data: ResumeData): { valid: boolean; message?: string } {
+  for (const validate of SECTION_VALIDATORS) {
+    const message = validate(data);
+    if (message) return { valid: false, message };
+  }
   return { valid: true };
 }

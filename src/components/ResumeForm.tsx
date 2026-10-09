@@ -8,6 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, Upload, Image } from "lucide-react";
 import { ResumeData } from "./ResumeBuilder";
 import { RichTextEditor } from "./RichTextEditor";
+import { ParagraphEditor, PointsEditor } from "./PlainTextEditors";
 import { PhotoCropDialog } from "./PhotoCropDialog";
 import { useRef, useState } from "react";
 import { todayIsoDate, toTitleCase } from "@/utils/resumeRules";
@@ -15,22 +16,25 @@ import { templateSupportsPhoto } from "@/utils/templates";
 
 interface ResumeFormProps {
   resumeData: ResumeData;
-  setResumeData: (data: ResumeData) => void;
+  /** Takes an updater so quick successive changes (e.g. score type, then score) build on each other. */
+  setResumeData: (update: (prev: ResumeData) => ResumeData) => void;
   activeSection: string;
   selectedTemplate: string;
+  /** Plain boxes instead of the rich-text editor (guided flow): the look decides formatting, students edit words. */
+  plainEditors?: boolean;
 }
 
-export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedTemplate }: ResumeFormProps) => {
+export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedTemplate, plainEditors = false }: ResumeFormProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   
   const supportsPhoto = templateSupportsPhoto(selectedTemplate);
   
   const updatePersonalInfo = (field: string, value: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       personalInfo: { ...resumeData.personalInfo, [field]: value }
-    });
+    }));
   };
 
   const handlePhotoUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,26 +61,26 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
       description: "",
       experienceType: undefined,
     };
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       experience: [...resumeData.experience, newExperience]
-    });
+    }));
   };
 
   const updateExperience = (id: string, field: string, value: string | boolean) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       experience: resumeData.experience.map(exp =>
         exp.id === id ? { ...exp, [field]: value } : exp
       )
-    });
+    }));
   };
 
   const removeExperience = (id: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       experience: resumeData.experience.filter(exp => exp.id !== id)
-    });
+    }));
   };
 
   const addEducation = () => {
@@ -92,26 +96,26 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
       gpa: "",
       scoreType: undefined,
     };
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       education: [...resumeData.education, newEducation]
-    });
+    }));
   };
 
   const updateEducation = (id: string, field: string, value: string | boolean) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       education: resumeData.education.map(edu =>
         edu.id === id ? { ...edu, [field]: field === "current" ? Boolean(value) : value } : edu
       )
-    });
+    }));
   };
 
   const removeEducation = (id: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       education: resumeData.education.filter(edu => edu.id !== id)
-    });
+    }));
   };
 
   const addSkill = () => {
@@ -120,26 +124,26 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
       name: "",
       level: "Intermediate"
     };
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       skills: [...resumeData.skills, newSkill]
-    });
+    }));
   };
 
   const updateSkill = (id: string, field: string, value: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       skills: resumeData.skills.map(skill =>
         skill.id === id ? { ...skill, [field]: value } : skill
       )
-    });
+    }));
   };
 
   const removeSkill = (id: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       skills: resumeData.skills.filter(skill => skill.id !== id)
-    });
+    }));
   };
 
   const addProject = () => {
@@ -150,26 +154,26 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
       technologies: "",
       link: ""
     };
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       projects: [...(resumeData.projects || []), newProject]
-    });
+    }));
   };
 
   const updateProject = (id: string, field: string, value: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       projects: (resumeData.projects || []).map(project =>
         project.id === id ? { ...project, [field]: value } : project
       )
-    });
+    }));
   };
 
   const removeProject = (id: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       projects: (resumeData.projects || []).filter(project => project.id !== id)
-    });
+    }));
   };
 
   // Achievement functions
@@ -180,26 +184,26 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
       description: "",
       date: ""
     };
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       achievements: [...(resumeData.achievements || []), newAchievement]
-    });
+    }));
   };
 
   const updateAchievement = (id: string, field: string, value: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       achievements: (resumeData.achievements || []).map(achievement =>
         achievement.id === id ? { ...achievement, [field]: value } : achievement
       )
-    });
+    }));
   };
 
   const removeAchievement = (id: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       achievements: (resumeData.achievements || []).filter(achievement => achievement.id !== id)
-    });
+    }));
   };
 
   // Award functions
@@ -211,26 +215,26 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
       date: "",
       description: ""
     };
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       awards: [...(resumeData.awards || []), newAward]
-    });
+    }));
   };
 
   const updateAward = (id: string, field: string, value: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       awards: (resumeData.awards || []).map(award =>
         award.id === id ? { ...award, [field]: value } : award
       )
-    });
+    }));
   };
 
   const removeAward = (id: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       awards: (resumeData.awards || []).filter(award => award.id !== id)
-    });
+    }));
   };
 
   // Certification functions
@@ -243,26 +247,26 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
       expiryDate: "",
       credentialId: ""
     };
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       certifications: [...(resumeData.certifications || []), newCertification]
-    });
+    }));
   };
 
   const updateCertification = (id: string, field: string, value: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       certifications: (resumeData.certifications || []).map(cert =>
         cert.id === id ? { ...cert, [field]: value } : cert
       )
-    });
+    }));
   };
 
   const removeCertification = (id: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       certifications: (resumeData.certifications || []).filter(cert => cert.id !== id)
-    });
+    }));
   };
 
   // Publication functions
@@ -275,26 +279,26 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
       authors: "",
       link: ""
     };
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       publications: [...(resumeData.publications || []), newPublication]
-    });
+    }));
   };
 
   const updatePublication = (id: string, field: string, value: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       publications: (resumeData.publications || []).map(pub =>
         pub.id === id ? { ...pub, [field]: value } : pub
       )
-    });
+    }));
   };
 
   const removePublication = (id: string) => {
-    setResumeData({
+    setResumeData((resumeData) => ({
       ...resumeData,
       publications: (resumeData.publications || []).filter(pub => pub.id !== id)
-    });
+    }));
   };
 
   const renderPersonalInfo = () => (
@@ -320,6 +324,8 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
             <Input
               id="email"
               type="email"
+              inputMode="email"
+              autoComplete="email"
               value={resumeData.personalInfo.email}
               onChange={(e) => updatePersonalInfo("email", e.target.value)}
               placeholder="john@example.com"
@@ -329,6 +335,9 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
             <Label htmlFor="phone">Phone *</Label>
             <Input
               id="phone"
+              type="tel"
+              inputMode="tel"
+              autoComplete="tel"
               value={resumeData.personalInfo.phone}
               onChange={(e) => updatePersonalInfo("phone", e.target.value)}
               placeholder="+1 (555) 123-4567"
@@ -347,6 +356,8 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
             <Label htmlFor="website">Website (Optional)</Label>
             <Input
               id="website"
+              inputMode="url"
+              autoCapitalize="none"
               value={resumeData.personalInfo.website}
               onChange={(e) => updatePersonalInfo("website", e.target.value)}
               placeholder="https://johndoe.com"
@@ -356,6 +367,8 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
             <Label htmlFor="linkedin">LinkedIn (Optional)</Label>
             <Input
               id="linkedin"
+              inputMode="url"
+              autoCapitalize="none"
               value={resumeData.personalInfo.linkedin}
               onChange={(e) => updatePersonalInfo("linkedin", e.target.value)}
               placeholder="https://linkedin.com/in/johndoe"
@@ -363,13 +376,23 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
           </div>
         </div>
         <div>
-          <RichTextEditor
-            label="Professional Summary *"
-            value={resumeData.personalInfo.summary}
-            onChange={(value) => updatePersonalInfo("summary", value)}
-            placeholder="Brief professional summary highlighting your key achievements and skills..."
-            height="250px"
-          />
+          {plainEditors ? (
+            <ParagraphEditor
+              key="summary"
+              label="Professional Summary *"
+              value={resumeData.personalInfo.summary}
+              onChange={(value) => updatePersonalInfo("summary", value)}
+              placeholder="Brief professional summary highlighting your key achievements and skills..."
+            />
+          ) : (
+            <RichTextEditor
+              label="Professional Summary *"
+              value={resumeData.personalInfo.summary}
+              onChange={(value) => updatePersonalInfo("summary", value)}
+              placeholder="Brief professional summary highlighting your key achievements and skills..."
+              height="250px"
+            />
+          )}
         </div>
         {supportsPhoto && (
           <div>
@@ -514,13 +537,23 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
               )}
             </div>
             <div>
-              <RichTextEditor
-                label="Description"
-                value={exp.description}
-                onChange={(value) => updateExperience(exp.id, "description", value)}
-                placeholder="Describe your responsibilities and achievements..."
-                height="200px"
-              />
+              {plainEditors ? (
+                <PointsEditor
+                  key={exp.id}
+                  label="Description"
+                  value={exp.description}
+                  onChange={(value) => updateExperience(exp.id, "description", value)}
+                  placeholder="Describe your responsibilities and achievements..."
+                />
+              ) : (
+                <RichTextEditor
+                  label="Description"
+                  value={exp.description}
+                  onChange={(value) => updateExperience(exp.id, "description", value)}
+                  placeholder="Describe your responsibilities and achievements..."
+                  height="200px"
+                />
+              )}
             </div>
           </div>
         ))}
@@ -772,13 +805,23 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
               </div>
             </div>
             <div>
-              <RichTextEditor
-                label="Description"
-                value={project.description}
-                onChange={(value) => updateProject(project.id, "description", value)}
-                placeholder="Describe the project, your role, and key achievements..."
-                height="200px"
-              />
+              {plainEditors ? (
+                <PointsEditor
+                  key={project.id}
+                  label="Description"
+                  value={project.description}
+                  onChange={(value) => updateProject(project.id, "description", value)}
+                  placeholder="Describe the project, your role, and key achievements..."
+                />
+              ) : (
+                <RichTextEditor
+                  label="Description"
+                  value={project.description}
+                  onChange={(value) => updateProject(project.id, "description", value)}
+                  placeholder="Describe the project, your role, and key achievements..."
+                  height="200px"
+                />
+              )}
             </div>
           </div>
         ))}
@@ -834,13 +877,23 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
               </div>
             </div>
             <div>
-              <RichTextEditor
-                label="Description"
-                value={achievement.description}
-                onChange={(value) => updateAchievement(achievement.id, "description", value)}
-                placeholder="Describe your achievement..."
-                height="200px"
-              />
+              {plainEditors ? (
+                <PointsEditor
+                  key={achievement.id}
+                  label="Description"
+                  value={achievement.description}
+                  onChange={(value) => updateAchievement(achievement.id, "description", value)}
+                  placeholder="Describe your achievement..."
+                />
+              ) : (
+                <RichTextEditor
+                  label="Description"
+                  value={achievement.description}
+                  onChange={(value) => updateAchievement(achievement.id, "description", value)}
+                  placeholder="Describe your achievement..."
+                  height="200px"
+                />
+              )}
             </div>
           </div>
         ))}
@@ -904,13 +957,23 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
               </div>
             </div>
             <div>
-              <RichTextEditor
-                label="Description *"
-                value={award.description || ""}
-                onChange={(value) => updateAward(award.id, "description", value)}
-                placeholder="Describe the award and your achievement..."
-                height="200px"
-              />
+              {plainEditors ? (
+                <ParagraphEditor
+                  key={award.id}
+                  label="Description *"
+                  value={award.description || ""}
+                  onChange={(value) => updateAward(award.id, "description", value)}
+                  placeholder="Describe the award and your achievement..."
+                />
+              ) : (
+                <RichTextEditor
+                  label="Description *"
+                  value={award.description || ""}
+                  onChange={(value) => updateAward(award.id, "description", value)}
+                  placeholder="Describe the award and your achievement..."
+                  height="200px"
+                />
+              )}
             </div>
           </div>
         ))}

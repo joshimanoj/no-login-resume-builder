@@ -78,6 +78,11 @@ export interface ResumeData {
 }
 
 export const storeResumeData = async (resumeData: ResumeData, templateId: string) => {
+  // Local development, tests and staging (VITE_RECORD_DOWNLOADS=false) must never write to the live downloads table.
+  if (import.meta.env.DEV || import.meta.env.VITE_RECORD_DOWNLOADS === 'false') {
+    console.info('Download not recorded in Supabase (development or staging build)')
+    return { data: null, error: null }
+  }
   try {
     const supabase = getSupabaseClient()
     

@@ -13,7 +13,9 @@ import {
 } from "./helpers/fillValidResume";
 
 test.beforeEach(async ({ page }) => {
-  await page.goto("/");
+  // Downloads would otherwise be recorded in the live Supabase project.
+  await page.route(/supabase\.co/, (route) => route.fulfill({ status: 201, contentType: "application/json", body: "[]" }));
+  await page.goto("/classic");
 });
 
 test("empty download is blocked and checklist does not open", async ({ page }) => {
@@ -137,7 +139,7 @@ test("classic preview joins contact with pipes and hides Skills until a name is 
 
 test("sample=1 loads Jordan Hale on Modern, Creative, and Sidebar", async ({ page }) => {
   for (const template of ["modern", "creative", "sidebar"] as const) {
-    await page.goto(`/?sample=1&template=${template}`);
+    await page.goto(`/classic?sample=1&template=${template}`);
     const preview = page.locator("#resume-preview");
     await expect(preview).toContainText("jordan.hale@email.com");
     await expect(preview).toContainText("TypeScript");
