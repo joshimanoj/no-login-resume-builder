@@ -46,10 +46,11 @@ import { CvPreview } from "./screens";
 import { PAGE_WIDTH } from "@/components/ScaledPreview";
 import { EXAMPLE_CV } from "./demo";
 import { paragraphToHtml } from "@/utils/plainText";
-import { formatMonthInput, parseMonthInput, toMonthInput } from "@/utils/monthInput";
+import { MONTHS, joinMonth, splitMonth } from "@/utils/monthInput";
 import {
   Actions,
   BigButton,
+  HelpButton,
   Chip,
   FieldError,
   Hint,
@@ -621,37 +622,65 @@ const thisMonth = () => new Date().toISOString().slice(0, 7);
 
 function MonthStep({ step }: { step: StepOf<"month"> }) {
   const { state, advance } = useGuided();
-  // Typed as numbers: the browser's month picker confuses students on Android.
-  const [text, setText] = useState(() => toMonthInput(step.get(state)));
+  // Two simple boxes: the browser's month picker confuses students on Android.
+  const initial = splitMonth(step.get(state));
+  const [month, setMonth] = useState(initial.month);
+  const [year, setYear] = useState(initial.year);
   const [error, setError] = useState<string | null>(null);
+  const yearRef = useRef<HTMLInputElement>(null);
   return (
     <form
       className="flex flex-1 flex-col"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!text) return;
-        const parsed = parseMonthInput(text);
-        if ("error" in parsed) return setError(parsed.error);
-        if (step.noFuture && parsed.value > thisMonth()) return setError("This can't be in the future.");
-        advance(step.set(state, parsed.value), step.key);
+        const joined = joinMonth(month, year);
+        if ("error" in joined) return setError(joined.error);
+        if (step.noFuture && joined.value > thisMonth()) return setError("This can't be in the future.");
+        advance(step.set(state, joined.value), step.key);
       }}
     >
       <Question>{step.q}</Question>
-      <Hint>Month and year, as numbers. For example 07 / 2023.</Hint>
-      <TextInput
-        className="mt-5 tracking-wide"
-        autoFocus
-        inputMode="numeric"
-        enterKeyHint="next"
-        autoComplete="off"
-        placeholder="MM / YYYY"
-        aria-label={`${step.q} Month and year`}
-        value={text}
-        onChange={(e) => (setText(formatMonthInput(e.target.value)), setError(null))}
-      />
+      <div className="mt-5 grid grid-cols-2 gap-3">
+        <label className="block">
+          <span className="text-sm font-medium text-slate-600">Month</span>
+          <select
+            className="mt-1.5 h-[50px] w-full rounded-xl border-[1.5px] border-slate-300 bg-white px-3 text-base outline-none focus:border-primary"
+            value={month}
+            onChange={(e) => {
+              setMonth(e.target.value);
+              setError(null);
+              if (e.target.value && !year) yearRef.current?.focus();
+            }}
+          >
+            <option value="">Choose</option>
+            {MONTHS.map((name, k) => {
+              const value = String(k + 1).padStart(2, "0");
+              return (
+                <option key={value} value={value}>
+                  {value} – {name}
+                </option>
+              );
+            })}
+          </select>
+        </label>
+        <label className="block">
+          <span className="text-sm font-medium text-slate-600">Year</span>
+          <TextInput
+            ref={yearRef}
+            className="mt-1.5"
+            inputMode="numeric"
+            enterKeyHint="next"
+            autoComplete="off"
+            maxLength={4}
+            placeholder="2023"
+            value={year}
+            onChange={(e) => (setYear(e.target.value.replace(/\D/g, "").slice(0, 4)), setError(null))}
+          />
+        </label>
+      </div>
       <FieldError>{error}</FieldError>
       <Actions>
-        <BigButton type="submit" disabled={!text}>
+        <BigButton type="submit" disabled={!month || !year}>
           Next
         </BigButton>
         {step.skip ? (
@@ -773,13 +802,7 @@ function DescribeStep({ step }: { step: StepOf<"describe"> }) {
       <button type="button" className="mt-2 flex min-h-11 items-center gap-1 text-[15px] text-primary" onClick={() => setPoints([...points, ""])}>
         <Plus className="h-4 w-4" /> Add another point
       </button>
-      <button
-        type="button"
-        onClick={() => setHelping(true)}
-        className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-[#eef3f8] px-3 text-sm font-medium text-primary"
-      >
-        Need help? Answer 3 short questions
-      </button>
+      <HelpButton onClick={() => setHelping(true)}>Need help? Answer 3 short questions</HelpButton>
       <FieldError>{error}</FieldError>
       <Actions>
         <BigButton onClick={save}>Next</BigButton>
@@ -898,109 +921,62 @@ function MoreStep({ step }: { step: StepOf<"more"> }) {
 
 // ---------- professional summary ----------
 
-const STARTERS = [
-  ["I am a", "3rd-year B.Sc. Physics", "student"],
-  ["at", "K.T.H.M. College, Nashik", "."],
-  ["I am good at", "web development and Python", "."],
-  ["I am looking for", "a software internship", "."],
+/** Different students, different goals: examples to learn from, not a template to copy. */
+const SUMMARY_EXAMPLES = [
+  "Final-year B.Com student with six months of accounts work in my family's shop, using Tally and MS Excel. I enjoy working with numbers and am looking for an accounts or finance trainee role.",
+  "Second-year B.Sc. Chemistry student who loves lab work. I have helped run science demonstrations for school children and want a research internship in analytical chemistry.",
+  "B.A. English student who writes for the college magazine and teaches spoken English to Class 8 students. Looking for a content writing or teaching internship.",
 ];
-
-const composeSummary = (parts: string[]) => {
-  const [a, b, c, d] = parts.map((p) => p.trim());
-  const sentences = [
-    a || b ? `I am a ${a || "___"} student${b ? ` at ${b}` : ""}.` : "",
-    c ? `I am good at ${c}.` : "",
-    d ? `I am looking for ${d}.` : "",
-  ].filter(Boolean);
-  return sentences.join(" ");
-};
 
 function SummaryStep({ step }: { step: StepOf<"summary"> }) {
   const { state, advance } = useGuided();
-  const existing = htmlToBullets(state.data.personalInfo.summary).join(" ");
-  const savedParts = state.prompts["summary"] ?? ["", "", "", ""];
-  // Her own words by default; the fill-in-the-blanks help only reopens if that's how she wrote it.
-  const usedBlanks = Boolean(existing) && existing === composeSummary(savedParts);
-  const [own, setOwn] = useState(!usedBlanks);
-  const [parts, setParts] = useState(savedParts);
-  const [text, setText] = useState(existing);
+  const [text, setText] = useState(() => htmlToBullets(state.data.personalInfo.summary).join(" "));
+  const [helping, setHelping] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const finalText = own ? text : composeSummary(parts);
-
   const save = () => {
-    if (hasNonLatinScript(finalText)) return setError(ENGLISH_ONLY);
-    const s: GuidedState = {
-      ...state,
-      prompts: { ...state.prompts, summary: parts },
-      data: { ...state.data, personalInfo: { ...state.data.personalInfo, summary: paragraphToHtml(finalText) } },
-    };
+    if (hasNonLatinScript(text)) return setError(ENGLISH_ONLY);
+    const s: GuidedState = { ...state, data: { ...state.data, personalInfo: { ...state.data.personalInfo, summary: paragraphToHtml(text) } } };
     advance(s, step.key);
   };
 
   return (
     <>
       <Question>Your professional summary</Question>
-      <Hint>2 to 3 lines at the top of your CV: who you are, what you're good at, and what you're looking for.</Hint>
-      {own ? (
-        <TextArea
-          className="mt-4"
-          rows={6}
-          aria-label="Professional summary"
-          value={text}
-          autoFocus
-          onChange={(e) => (setText(e.target.value), setError(null))}
-        />
-      ) : (
-        <div className="mt-4 space-y-3">
-          {STARTERS.map(([before, example], k) => (
-            <label key={k} className="block">
-              <span className="text-sm text-slate-600">{before}</span>
-              <TextInput
-                className="mt-1"
-                value={parts[k]}
-                placeholder={example}
-                onChange={(e) => {
-                  const copy = [...parts];
-                  copy[k] = e.target.value;
-                  setParts(copy);
-                  setError(null);
-                }}
-              />
-            </label>
-          ))}
-          {finalText && (
-            <div className="rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
-              <span className="text-xs font-medium text-slate-500">On your CV: </span>
-              {finalText}
-            </div>
-          )}
-        </div>
-      )}
+      <Hint>2 to 3 lines at the top of your CV, in your own words.</Hint>
+      <TextArea
+        className="mt-4"
+        rows={6}
+        aria-label="Professional summary"
+        value={text}
+        autoFocus
+        onChange={(e) => (setText(e.target.value), setError(null))}
+      />
       <FieldError>{error}</FieldError>
-      {own ? (
-        <button
-          type="button"
-          onClick={() => setOwn(false)}
-          className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl bg-[#eef3f8] px-3 text-sm font-medium text-primary"
-        >
-          Need help? Fill in the blanks
-        </button>
+      {helping ? (
+        <div className="mt-4 rounded-xl bg-[#eef3f8] p-4 text-sm text-slate-700">
+          <p className="font-medium text-primary">A good summary answers three things</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            <li>Who are you? Your year, degree and subject.</li>
+            <li>What are you good at, or what have you done that you're proud of?</li>
+            <li>What are you looking for next: an internship, a job, or higher studies?</li>
+          </ul>
+          <p className="mt-3 font-medium text-primary">Examples from different students</p>
+          <ul className="mt-2 space-y-2">
+            {SUMMARY_EXAMPLES.map((example) => (
+              <li key={example} className="rounded-lg bg-white p-3 italic text-slate-600">
+                {example}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 text-xs text-slate-500">Write about yourself. Don't copy an example: recruiters read many CVs.</p>
+        </div>
       ) : (
-        <button
-          type="button"
-          className="mt-3 min-h-11 text-left text-[15px] text-primary"
-          onClick={() => {
-            setText(finalText);
-            setOwn(true);
-          }}
-        >
-          Write it in my own words instead
-        </button>
+        <HelpButton onClick={() => setHelping(true)}>Need help? See what to write</HelpButton>
       )}
-      <p className="text-xs text-slate-400">You can come back and improve this once the rest of your CV is done.</p>
+      <p className="mt-3 text-xs text-slate-400">You can come back and improve this once the rest of your CV is done.</p>
       <Actions>
-        <BigButton onClick={save} disabled={!finalText.trim()}>
+        <BigButton onClick={save} disabled={!text.trim()}>
           Next
         </BigButton>
         <SkipForNow step={step} />

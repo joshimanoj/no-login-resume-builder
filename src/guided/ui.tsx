@@ -159,6 +159,15 @@ export function BigButton({ tone = "primary", busy, className, children, disable
   );
 }
 
+/** The soft "Need help? …" button that opens optional guidance. */
+export const HelpButton = ({ className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) => (
+  <button
+    type="button"
+    className={cn("mt-3 flex min-h-11 w-full items-center justify-center rounded-xl bg-[#eef3f8] px-3 text-sm font-medium text-primary", className)}
+    {...rest}
+  />
+);
+
 export const LinkButton = ({ className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement>) => (
   <button type="button" className={cn("mt-1 min-h-11 w-full text-center text-[15px] text-primary", className)} {...rest} />
 );

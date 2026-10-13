@@ -16,11 +16,11 @@ async function answer(page: Page, text: string) {
   await next(page);
 }
 
-/** Types "2023-07" the way a student would: as numbers into the MM / YYYY box. */
+/** Enters "2023-07" the way a student would: picks the month, types the year. */
 async function month(page: Page, value: string) {
   const [year, mm] = value.split("-");
-  await page.getByPlaceholder("MM / YYYY").pressSequentially(`${mm}${year}`);
-  await expect(page.getByPlaceholder("MM / YYYY")).toHaveValue(`${mm} / ${year}`);
+  await page.getByRole("combobox", { name: "Month" }).selectOption(mm);
+  await page.getByRole("textbox", { name: "Year" }).fill(year);
   await next(page);
 }
 
@@ -52,15 +52,12 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   await answer(page, "Nashik, Maharashtra");
   await tap(page, "No"); // LinkedIn
   await tap(page, "No"); // website
-  // Her own words by default; the fill-in-the-blanks help is one tap away.
-  await expect(page.getByRole("textbox", { name: "Professional summary" })).toBeVisible();
-  await tap(page, "Need help? Fill in the blanks");
-  const blanks = page.getByRole("textbox");
-  await blanks.nth(0).fill("3rd-year B.Sc. Physics");
-  await blanks.nth(1).fill("K.T.H.M. College, Nashik");
-  await blanks.nth(2).fill("web development and Python");
-  await blanks.nth(3).fill("a software internship");
-  await expect(page.getByText("On your CV:")).toBeVisible();
+  // Her own words; "Need help?" shows what to cover and varied examples, not a template.
+  await tap(page, "Need help? See what to write");
+  await expect(page.getByText("A good summary answers three things")).toBeVisible();
+  await page
+    .getByRole("textbox", { name: "Professional summary" })
+    .fill("Third-year B.Sc. Physics student at K.T.H.M. College, Nashik, who enjoys building websites and working with data in Python. Looking for a software internship.");
   await next(page);
   await expect(page.getByRole("heading", { name: "Looks good!" })).toBeVisible();
   await tap(page, "Continue to Education");

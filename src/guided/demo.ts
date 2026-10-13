@@ -66,7 +66,6 @@ export function demoState(): GuidedState {
   };
 
   s.prompts = {
-    summary: ["3rd-year B.Sc. Physics", "K.T.H.M. College, Nashik", "web development and Python", "a software internship"],
     "demo-exp-1": exp1,
     "demo-exp-2": exp2,
     "demo-ach-1": ach,

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronRight, FileDown, MessageSquareText, Sparkles } from "lucide-react";
+import { ChevronRight, FileDown, LayoutTemplate, MessageSquareText, PenLine, Sparkles, type LucideIcon } from "lucide-react";
 import { ResumePreview } from "@/components/ResumePreview";
 import { ResumeForm } from "@/components/ResumeForm";
 import { PhotoCropDialog } from "@/components/PhotoCropDialog";
@@ -261,11 +261,21 @@ export function YourCv() {
       </div>
 
       {/* Secondary actions stay in the page; only the main action sticks to the bottom. */}
-      <div className="mt-3 flex flex-wrap justify-center gap-x-6">
-        {!reviewing && <LinkButton className="w-auto" onClick={() => navigate("/look")}>Change the look</LinkButton>}
-        {rejected && !reviewing && <LinkButton className="w-auto" onClick={() => navigate("/review")}>See Curie's review</LinkButton>}
-        {!reviewing && <LinkButton className="w-auto" onClick={() => navigate("/edit")}>Edit everything</LinkButton>}
-      </div>
+      {!reviewing && (
+        <div className="mt-3 grid grid-cols-2 gap-2.5">
+          <SecondaryButton icon={LayoutTemplate} onClick={() => navigate("/look")}>
+            Change the look
+          </SecondaryButton>
+          <SecondaryButton icon={PenLine} onClick={() => navigate("/edit")}>
+            Edit everything
+          </SecondaryButton>
+          {rejected && (
+            <SecondaryButton icon={Sparkles} className="col-span-2" onClick={() => navigate("/review")}>
+              See Curie's review
+            </SecondaryButton>
+          )}
+        </div>
+      )}
 
       <Actions>
         {reviewing ? (
@@ -286,6 +296,29 @@ export function YourCv() {
         )}
       </Actions>
     </Screen>
+  );
+}
+
+function SecondaryButton({
+  icon: Icon,
+  className = "",
+  children,
+  onClick,
+}: {
+  icon: LucideIcon;
+  className?: string;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-12 items-center justify-center gap-2 rounded-xl border-[1.5px] border-slate-300 bg-white px-3 text-sm font-medium text-primary active:bg-slate-50 ${className}`}
+    >
+      <Icon className="h-4 w-4 shrink-0" aria-hidden />
+      {children}
+    </button>
   );
 }
 
@@ -763,6 +796,7 @@ export function LookPicker() {
   const noPhoto = params.get("nophoto") === "1";
   const looks = TEMPLATE_IDS.filter((t) => !noPhoto || !templateSupportsPhoto(t));
   const [id, setId] = useState<TemplateId>(() => (looks.includes(state.template as TemplateId) ? (state.template as TemplateId) : looks[0]));
+  const [tab, setTab] = useState<"looks" | "preview">("looks");
   if (isUnderReview(state)) return <Navigate to="/cv" replace />;
   const cv = hasEnteredAnything(state.data) ? state.data : EXAMPLE_CV;
 
@@ -772,38 +806,53 @@ export function LookPicker() {
     else navigate(isAcceptedAndUnchanged(state) ? "/download" : "/cv");
   };
 
+  const tabClass = (on: boolean) =>
+    `min-h-10 rounded-lg text-sm font-medium ${on ? "bg-white text-primary shadow-sm" : "text-slate-600"}`;
+
   return (
     <Screen title="Choose a look" label="Last step" wide>
-      <Hint>Tap a look to see your CV in it. You can change it later.</Hint>
-      {/* Real thumbnails of her CV, so it's obvious these are designs to choose from. */}
-      <div className="-mx-5 mt-3 flex snap-x gap-3 overflow-x-auto px-5 pb-2 md:-mx-8 md:px-8" role="radiogroup" aria-label="Looks">
-        {looks.map((t) => (
-          <button
-            key={t}
-            type="button"
-            role="radio"
-            aria-checked={t === id}
-            aria-label={TEMPLATE_NAMES[t]}
-            onClick={() => setId(t)}
-            className="w-[92px] shrink-0 snap-start"
-          >
-            <div className={`pointer-events-none h-[124px] overflow-hidden rounded-lg border-2 ${t === id ? "border-secondary" : "border-transparent"}`}>
-              <CvPreview data={cv} template={t} />
-            </div>
-            <p className={`mt-1 truncate text-center text-xs ${t === id ? "font-medium text-slate-900" : "text-slate-600"}`}>
-              {t === id ? "✓ " : ""}
-              {TEMPLATE_NAMES[t]}
-            </p>
-          </button>
-        ))}
+      {/* Phones: the looks and the preview take turns. Larger screens show both. */}
+      <div className="mt-2 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 md:hidden" role="tablist" aria-label="Choose a look">
+        <button type="button" role="tab" aria-selected={tab === "looks"} onClick={() => setTab("looks")} className={tabClass(tab === "looks")}>
+          Looks
+        </button>
+        <button type="button" role="tab" aria-selected={tab === "preview"} onClick={() => setTab("preview")} className={tabClass(tab === "preview")}>
+          Preview: {TEMPLATE_NAMES[id]}
+        </button>
       </div>
-      <p className="mt-3 font-medium">
-        {TEMPLATE_NAMES[id]}
-        {templateSupportsPhoto(id) && <span className="text-sm font-normal text-slate-500"> · has a photo</span>}
-      </p>
-      <div className="mt-2">
-        <CvPreview data={cv} template={id} />
+
+      <div className={tab === "looks" ? "" : "hidden md:block"}>
+        <Hint className="mt-3">Tap a look to choose it. You can change it later.</Hint>
+        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4" role="radiogroup" aria-label="Looks">
+          {looks.map((t) => (
+            <button key={t} type="button" role="radio" aria-checked={t === id} aria-label={TEMPLATE_NAMES[t]} onClick={() => setId(t)}>
+              <div
+                className={`pointer-events-none h-[210px] overflow-hidden rounded-xl border-2 md:h-[170px] ${
+                  t === id ? "border-secondary" : "border-slate-200"
+                }`}
+              >
+                <CvPreview data={cv} template={t} />
+              </div>
+              <p className={`mt-1.5 truncate text-center text-sm ${t === id ? "font-medium text-slate-900" : "text-slate-600"}`}>
+                {t === id ? "✓ " : ""}
+                {TEMPLATE_NAMES[t]}
+                {templateSupportsPhoto(t) && <span className="text-xs text-slate-400"> · photo</span>}
+              </p>
+            </button>
+          ))}
+        </div>
       </div>
+
+      <div className={tab === "preview" ? "mt-4" : "hidden md:mt-6 md:block"}>
+        <p className="font-medium">
+          {TEMPLATE_NAMES[id]}
+          {templateSupportsPhoto(id) && <span className="text-sm font-normal text-slate-500"> · has a photo</span>}
+        </p>
+        <div className="mt-2">
+          <CvPreview data={cv} template={id} />
+        </div>
+      </div>
+
       <Actions>
         <BigButton tone="green" onClick={use}>
           Use {TEMPLATE_NAMES[id]}
