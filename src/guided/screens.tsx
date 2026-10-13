@@ -8,7 +8,7 @@ import { ScaledPreview } from "@/components/ScaledPreview";
 import { useToast } from "@/hooks/use-toast";
 import { generatePDF, generateWord } from "@/utils/pdfGenerator";
 import { storeResumeData } from "@/utils/resumeStorage";
-import { applyTitleCaseName, type ResumeData } from "@/utils/resumeRules";
+import { applyTitleCaseName, validateResumeData, type ResumeData } from "@/utils/resumeRules";
 import { TEMPLATE_IDS, TEMPLATE_NAMES, templateSupportsPhoto, type TemplateId } from "@/utils/templates";
 import { stepPath, useGuided } from "./GuidedContext";
 import { EXAMPLE_CV } from "./demo";
@@ -227,6 +227,9 @@ const Brand = () => (
 
 // ---------- your CV ----------
 
+/** The original builder's download rule: the required details are filled in. */
+const canDownload = (data: ResumeData) => validateResumeData(applyTitleCaseName(data)).valid;
+
 export function CvPreview({ data, template, id, zoom }: { data: ResumeData; template: string; id?: string; zoom?: number }) {
   return (
     <div className={`overflow-hidden rounded-lg border border-slate-200 bg-white ${zoom ? "w-fit" : ""}`}>
@@ -248,12 +251,14 @@ export function YourCv() {
   const editedAfterAccept = isAccepted(state) && !acceptedNow;
   const failing = firstFailingSection(state);
   const rejected = latest?.review?.verdict === "rejected";
+  // Download follows the original builder's rules: the required details, nothing more. No sign-in or review needed.
+  const downloadReady = canDownload(state.data);
 
   return (
     <Screen title="Your CV" back={false} wide>
       {reviewing && <Banner tone="info">Curie is reviewing your CV. You can't edit it until the review is ready.</Banner>}
-      {acceptedNow && <Banner tone="good">Accepted by Curie. You can choose a look and download it.</Banner>}
-      {editedAfterAccept && <Banner tone="warn">You changed your CV after it was accepted. Submit it again to download.</Banner>}
+      {acceptedNow && <Banner tone="good">Accepted by Curie.</Banner>}
+      {editedAfterAccept && <Banner tone="info">You changed your CV after Curie accepted it. Submit it again if you'd like a new review.</Banner>}
       {rejected && !reviewing && <Banner tone="warn">Curie asked for another attempt. Improve the sections in your review, then submit again.</Banner>}
 
       <div className="mt-3">
@@ -278,22 +283,24 @@ export function YourCv() {
       )}
 
       <Actions>
-        {reviewing ? (
-          <BigButton onClick={() => navigate("/review")}>Check the review status</BigButton>
-        ) : acceptedNow ? (
-          <BigButton tone="green" onClick={() => navigate("/download")}>
-            Download my CV
-          </BigButton>
-        ) : failing ? (
-          <>
+        <div className="space-y-2.5">
+          {reviewing ? (
+            <BigButton onClick={() => navigate("/review")}>Check the review status</BigButton>
+          ) : acceptedNow ? null : failing ? (
             <BigButton onClick={() => goStep(firstStepOfSection(state, failing.id))}>Finish {failing.label}</BigButton>
-            <Hint className="text-center">Finish every section to submit your CV to Curie.</Hint>
-          </>
-        ) : (
-          <BigButton tone="green" onClick={() => navigate("/submit")} disabled={attemptsLeft(state) <= 0}>
-            {rejected || editedAfterAccept ? "Submit again" : "Submit to Curie for review"}
-          </BigButton>
-        )}
+          ) : (
+            <BigButton tone="green" onClick={() => navigate("/submit")} disabled={attemptsLeft(state) <= 0}>
+              {rejected || editedAfterAccept ? "Submit again" : "Submit to Curie for review"}
+            </BigButton>
+          )}
+          {downloadReady ? (
+            <BigButton tone={acceptedNow ? "green" : "outline"} onClick={() => navigate("/download")}>
+              <FileDown className="h-5 w-5" aria-hidden /> Download my CV
+            </BigButton>
+          ) : (
+            <Hint className="text-center">Add the required details to download your CV.</Hint>
+          )}
+        </div>
       </Actions>
     </Screen>
   );
@@ -803,7 +810,7 @@ export function LookPicker() {
   const use = () => {
     update((s) => ({ ...s, template: id }));
     if (templateSupportsPhoto(id) && !state.data.personalInfo.photo) navigate("/photo");
-    else navigate(isAcceptedAndUnchanged(state) ? "/download" : "/cv");
+    else navigate("/cv");
   };
 
   const tabClass = (on: boolean) =>
@@ -909,7 +916,7 @@ export function PhotoStep() {
               return { ...s, data, submissions: subs };
             });
             setSrc(null);
-            navigate(accepted ? "/download" : "/cv");
+            navigate("/cv");
           }}
         />
       </Actions>
@@ -921,7 +928,7 @@ export function Download() {
   const { state } = useGuided();
   const { toast } = useToast();
   const [busy, setBusy] = useState<"pdf" | "word" | null>(null);
-  if (!isAcceptedAndUnchanged(state)) return <Navigate to="/cv" replace />;
+  if (!canDownload(state.data)) return <Navigate to="/cv" replace />;
   const name = state.data.personalInfo.fullName.replace(/\s+/g, "_") || "My";
 
   const pdf = async () => {

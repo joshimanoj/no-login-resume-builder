@@ -154,6 +154,9 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   await expect(page.getByRole("radiogroup", { name: "Looks" }).getByRole("radio")).toHaveCount(9);
   await page.getByRole("radio", { name: "Minimal" }).click();
   await tap(page, "Use Minimal");
+  await expect(page).toHaveURL(/\/cv$/);
+  await expect(page.getByText("Accepted by Curie.")).toBeVisible();
+  await page.getByRole("button", { name: "Download my CV" }).click();
   await expect(page.getByRole("heading", { name: "Your CV is ready to send" })).toBeVisible();
   await expect(page.locator("#resume-preview")).toContainText("Web Development Intern");
   await expect(page.getByRole("button", { name: "Download my CV" })).toBeEnabled();
@@ -165,12 +168,20 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   await expect(page.getByText("Needs another attempt", { exact: false })).toBeVisible();
 });
 
-test("download is locked until Curie accepts the CV", async ({ page }) => {
+test("download needs only the required details, not sign-in or a review", async ({ page }) => {
+  // An empty CV can't be downloaded yet.
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
   await page.goto("/download");
   await expect(page).toHaveURL(/\/cv$/);
-  await expect(page.getByRole("button", { name: /Finish Personal Information/ })).toBeVisible();
+  await expect(page.getByText("Add the required details to download your CV.")).toBeVisible();
+
+  // A complete CV can be downloaded straight away, without signing in or submitting.
+  await page.goto("/demo?to=cv");
+  await expect(page).toHaveURL(/\/cv$/);
+  await page.getByRole("button", { name: "Download my CV" }).click();
+  await expect(page.getByRole("heading", { name: "Your CV is ready to send" })).toBeVisible();
+  await expect(page.locator("#resume-preview")).toContainText("Asha Rao");
 });
 
 test("the demo opens on the landing page, pre-filled", async ({ page }) => {

@@ -201,9 +201,10 @@ To request from the CURIE team:
 
 ## Decisions log
 - Curie reviews the CV as an assignment submission; she does not write.
-- Download only after Curie accepts.
+- Download any time the required details are filled in (the original builder's rules), without signing in or a Curie review. Changed after review feedback (points 20 and 23).
 - Up to 10 attempts.
-- Sign-in with Google is required to submit. Building does not need sign-in.
+- Sign-in with Google is required to submit to Curie. Building and downloading do not need sign-in.
+- No uploading of an existing CV: an uploaded CV couldn't be edited here, and Curie reviews the builder's sections.
 - The CV is in English only.
 - Education is second, before Work Experience.
 - The download checklist is replaced by section checks.
