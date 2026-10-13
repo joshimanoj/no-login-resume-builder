@@ -199,7 +199,7 @@ function educationSteps(s: S): Step[] {
         options: FIELDS[degree] ?? [], allowOther: true, get: () => str(item.field), set: (st, v) => setItem(st, sec, i, { field: v }),
       },
       {
-        kind: "text", key: `${k}.school`, section: sec, q: school ? "Your school name" : "Your college name",
+        kind: "text", key: `${k}.school`, section: sec, q: "School/University name",
         get: () => str(item.school), set: (st, v) => setItem(st, sec, i, { school: v }),
       },
       {
@@ -207,7 +207,7 @@ function educationSteps(s: S): Step[] {
         get: () => str(item.location), set: (st, v) => setItem(st, sec, i, { location: v }),
       },
       {
-        kind: "month", key: `${k}.start`, section: sec, q: "When did you start?", hint: "Month and year.",
+        kind: "month", key: `${k}.start`, section: sec, q: "When did you start?",
         get: () => toMonth(str(item.startDate)), set: (st, v) => setItem(st, sec, i, { startDate: fromMonth(v) }),
       },
       {
@@ -218,7 +218,7 @@ function educationSteps(s: S): Step[] {
     ];
     if (!item.current) {
       steps.push({
-        kind: "month", key: `${k}.end`, section: sec, q: "When did you finish?", hint: "Month and year.",
+        kind: "month", key: `${k}.end`, section: sec, q: "When did you finish?",
         get: () => toMonth(str(item.endDate)), set: (st, v) => setItem(st, sec, i, { endDate: fromMonth(v) }),
       });
     }
@@ -265,7 +265,7 @@ function experienceSteps(s: S): Step[] {
         get: () => str(item.location), set: (st, v) => setItem(st, sec, i, { location: v }),
       },
       {
-        kind: "month", key: `${k}.start`, section: sec, q: "When did you start?", hint: "Month and year.", noFuture: true,
+        kind: "month", key: `${k}.start`, section: sec, q: "When did you start?", noFuture: true,
         get: () => toMonth(str(item.startDate)), set: (st, v) => setItem(st, sec, i, { startDate: fromMonth(v) }),
       },
       {
@@ -276,7 +276,7 @@ function experienceSteps(s: S): Step[] {
     ];
     if (!item.current) {
       steps.push({
-        kind: "month", key: `${k}.end`, section: sec, q: "When did it end?", hint: "Month and year.", noFuture: true,
+        kind: "month", key: `${k}.end`, section: sec, q: "When did it end?", noFuture: true,
         get: () => toMonth(str(item.endDate)), set: (st, v) => setItem(st, sec, i, { endDate: fromMonth(v) }),
       });
     }
@@ -296,7 +296,7 @@ function projectSteps(s: S): Step[] {
         get: () => str(item.name), set: (st, v) => setItem(st, sec, i, { name: v }),
       },
       {
-        kind: "month", key: `${k}.date`, section: sec, q: "When was it?", hint: "Month and year.", skip: "Skip",
+        kind: "month", key: `${k}.date`, section: sec, q: "When was it?", skip: "Skip",
         get: () => toMonth(str(item.date)), set: (st, v) => setItem(st, sec, i, { date: fromMonth(v) }),
       },
       { kind: "tools", key: `${k}.tools`, section: sec, index: i },
@@ -316,7 +316,7 @@ function achievementSteps(s: S): Step[] {
         get: () => str(item.title), set: (st, v) => setItem(st, sec, i, { title: v }),
       },
       {
-        kind: "month", key: `${k}.date`, section: sec, q: "When?", hint: "Month and year.", skip: "Skip",
+        kind: "month", key: `${k}.date`, section: sec, q: "When?", skip: "Skip",
         get: () => toMonth(str(item.date)), set: (st, v) => setItem(st, sec, i, { date: fromMonth(v) }),
       },
       { kind: "prompts", key: `${k}.about`, section: sec, index: i },
@@ -339,7 +339,7 @@ function awardSteps(s: S): Step[] {
         get: () => str(item.issuer), set: (st, v) => setItem(st, sec, i, { issuer: v }),
       },
       {
-        kind: "month", key: `${k}.date`, section: sec, q: "When did you get it?", hint: "Month and year.", noFuture: true,
+        kind: "month", key: `${k}.date`, section: sec, q: "When did you get it?", noFuture: true,
         get: () => toMonth(str(item.date)), set: (st, v) => setItem(st, sec, i, { date: fromMonth(v) }),
       },
       {
@@ -369,7 +369,7 @@ function certificationSteps(s: S): Step[] {
         get: () => str(item.issuer), set: (st, v) => setItem(st, sec, i, { issuer: v }),
       },
       {
-        kind: "month", key: `${k}.date`, section: sec, q: "When did you get it?", hint: "Month and year.", noFuture: true,
+        kind: "month", key: `${k}.date`, section: sec, q: "When did you get it?", noFuture: true,
         get: () => toMonth(str(item.date)), set: (st, v) => setItem(st, sec, i, { date: fromMonth(v) }),
       },
       {
@@ -380,7 +380,7 @@ function certificationSteps(s: S): Step[] {
     ];
     if (s.answers[expiresKey]) {
       steps.push({
-        kind: "month", key: `${k}.expiry`, section: sec, q: "When does it expire?", hint: "Month and year.",
+        kind: "month", key: `${k}.expiry`, section: sec, q: "When does it expire?",
         get: () => toMonth(str(item.expiryDate)), set: (st, v) => setItem(st, sec, i, { expiryDate: fromMonth(v) }),
       });
     }
@@ -406,7 +406,7 @@ function publicationSteps(s: S): Step[] {
         get: () => str(item.journal), set: (st, v) => setItem(st, sec, i, { journal: v }),
       },
       {
-        kind: "month", key: `${k}.date`, section: sec, q: "When was it published?", hint: "Month and year.", noFuture: true,
+        kind: "month", key: `${k}.date`, section: sec, q: "When was it published?", noFuture: true,
         get: () => toMonth(str(item.date)), set: (st, v) => setItem(st, sec, i, { date: fromMonth(v) }),
       },
       {

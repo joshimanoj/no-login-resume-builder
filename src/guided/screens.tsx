@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, FileDown, MessageSquareText, Sparkles } from "lucide-react";
 import { ResumePreview } from "@/components/ResumePreview";
 import { ResumeForm } from "@/components/ResumeForm";
@@ -185,6 +185,7 @@ export function Welcome() {
           </div>
         </>
       )}
+      <AttemptHistory minimum={1} />
       {!state.user && (
         <p className="mt-5 rounded-xl bg-[#eef3f8] px-3.5 py-3 text-sm text-primary">
           Using a shared phone? Sign in with Google so your CV is saved to your account, not just this phone.
@@ -219,18 +220,18 @@ const Loading = () => (
 );
 
 const Brand = () => (
-  <div className="flex items-center gap-2 pt-2 md:hidden">
+  <Link to="/" className="flex w-fit items-center gap-2 pt-2 md:hidden" aria-label="VigyanShaala CV Builder, home">
     <img src="/Logo2.jpg" alt="" className="h-8 w-auto rounded" />
     <span className="font-medium">VigyanShaala CV Builder</span>
-  </div>
+  </Link>
 );
 
 // ---------- your CV ----------
 
-export function CvPreview({ data, template, id }: { data: ResumeData; template: string; id?: string }) {
+export function CvPreview({ data, template, id, zoom }: { data: ResumeData; template: string; id?: string; zoom?: number }) {
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-      <ScaledPreview>
+    <div className={`overflow-hidden rounded-lg border border-slate-200 bg-white ${zoom ? "w-fit" : ""}`}>
+      <ScaledPreview zoom={zoom}>
         <div id={id}>
           <ResumePreview resumeData={data} template={template} />
         </div>
@@ -669,21 +670,50 @@ function SectionFeedbackList({ submission }: { submission: Submission }) {
   );
 }
 
-function AttemptHistory() {
+/** Her submitted versions, newest first. Each opens the CV exactly as she submitted it. */
+function AttemptHistory({ minimum = 2 }: { minimum?: number }) {
   const { state } = useGuided();
-  if (state.submissions.length < 2) return null;
+  if (state.submissions.length < minimum) return null;
   return (
     <div className="mt-5">
       <p className="text-sm font-medium text-slate-600">Your attempts</p>
-      {state.submissions.map((s) => (
-        <div key={s.id} className="flex justify-between border-b border-slate-200 py-2.5 text-sm">
-          <span>Attempt {s.attempt}</span>
-          <span className="text-slate-600">
+      {[...state.submissions].reverse().map((s) => (
+        <Link key={s.id} to={`/attempt/${s.attempt}`} className="flex min-h-11 items-center justify-between gap-2 border-b border-slate-200 py-2.5 text-sm">
+          <span className="font-medium text-primary">Attempt {s.attempt}</span>
+          <span className="flex items-center gap-1 text-slate-600">
             {s.review ? `${"★".repeat(s.review.stars)} · ${s.review.verdict === "accepted" ? "Accepted" : "Needs another attempt"}` : "Reviewing"}
+            <ChevronRight className="h-4 w-4 text-slate-400" aria-hidden />
           </span>
-        </div>
+        </Link>
       ))}
     </div>
+  );
+}
+
+/** A past attempt: the CV exactly as she submitted it, and Curie's verdict on it. */
+export function AttemptView() {
+  const { attempt } = useParams();
+  const { state } = useGuided();
+  const navigate = useNavigate();
+  const sub = state.submissions.find((s) => String(s.attempt) === attempt);
+  if (!sub) return <Navigate to="/" replace />;
+  const r = sub.review;
+  return (
+    <Screen title={`Attempt ${sub.attempt}`} wide>
+      <Hint>
+        Submitted {new Date(sub.submittedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}.
+        {r ? ` ${r.verdict === "accepted" ? "Accepted" : "Needs another attempt"} · ${r.stars} out of 5.` : " Curie is reviewing it."}
+      </Hint>
+      {r && <p className="mt-3 rounded-xl border border-slate-200 p-3.5 text-[15px]">{r.overall}</p>}
+      <div className="mt-4">
+        <CvPreview data={sub.snapshot} template={state.template} />
+      </div>
+      <Actions>
+        <BigButton tone="outline" onClick={() => navigate(-1)}>
+          Back
+        </BigButton>
+      </Actions>
+    </Screen>
   );
 }
 
@@ -735,9 +765,9 @@ export function LookPicker() {
   const [params] = useSearchParams();
   const noPhoto = params.get("nophoto") === "1";
   const looks = TEMPLATE_IDS.filter((t) => !noPhoto || !templateSupportsPhoto(t));
-  const [i, setI] = useState(() => Math.max(0, looks.indexOf(state.template as TemplateId)));
+  const [id, setId] = useState<TemplateId>(() => (looks.includes(state.template as TemplateId) ? (state.template as TemplateId) : looks[0]));
   if (isUnderReview(state)) return <Navigate to="/cv" replace />;
-  const id = looks[i];
+  const cv = hasEnteredAnything(state.data) ? state.data : EXAMPLE_CV;
 
   const use = () => {
     update((s) => ({ ...s, template: id }));
@@ -747,27 +777,39 @@ export function LookPicker() {
 
   return (
     <Screen title="Choose a look" label="Last step" wide>
-      <Hint>
-        {i + 1} of {looks.length}. Your real CV, in each look.
-      </Hint>
-      <div className="mt-3 flex items-center gap-1">
-        <button type="button" aria-label="Previous look" onClick={() => setI((i - 1 + looks.length) % looks.length)} className="-ml-2 flex h-11 w-9 items-center justify-center text-primary">
-          <ChevronLeft className="h-6 w-6" />
-        </button>
-        <div className="min-w-0 flex-1">
-          <CvPreview data={state.data} template={id} />
-        </div>
-        <button type="button" aria-label="Next look" onClick={() => setI((i + 1) % looks.length)} className="-mr-2 flex h-11 w-9 items-center justify-center text-primary">
-          <ChevronRight className="h-6 w-6" />
-        </button>
+      <Hint>Tap a look to see your CV in it. You can change it later.</Hint>
+      {/* Real thumbnails of her CV, so it's obvious these are designs to choose from. */}
+      <div className="-mx-5 mt-3 flex snap-x gap-3 overflow-x-auto px-5 pb-2 md:-mx-8 md:px-8" role="radiogroup" aria-label="Looks">
+        {looks.map((t) => (
+          <button
+            key={t}
+            type="button"
+            role="radio"
+            aria-checked={t === id}
+            aria-label={TEMPLATE_NAMES[t]}
+            onClick={() => setId(t)}
+            className="w-[92px] shrink-0 snap-start"
+          >
+            <div className={`pointer-events-none h-[124px] overflow-hidden rounded-lg border-2 ${t === id ? "border-secondary" : "border-transparent"}`}>
+              <CvPreview data={cv} template={t} />
+            </div>
+            <p className={`mt-1 truncate text-center text-xs ${t === id ? "font-medium text-slate-900" : "text-slate-600"}`}>
+              {t === id ? "✓ " : ""}
+              {TEMPLATE_NAMES[t]}
+            </p>
+          </button>
+        ))}
       </div>
-      <p className="mt-3 text-center font-medium">
+      <p className="mt-3 font-medium">
         {TEMPLATE_NAMES[id]}
         {templateSupportsPhoto(id) && <span className="text-sm font-normal text-slate-500"> · has a photo</span>}
       </p>
+      <div className="mt-2">
+        <CvPreview data={cv} template={id} />
+      </div>
       <Actions>
-        <BigButton tone="green" className="mt-4" onClick={use}>
-          Use this look
+        <BigButton tone="green" onClick={use}>
+          Use {TEMPLATE_NAMES[id]}
         </BigButton>
       </Actions>
     </Screen>

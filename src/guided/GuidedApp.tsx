@@ -5,6 +5,7 @@ import { saveState } from "./state";
 import { demoState } from "./demo";
 import { StepScreen } from "./StepScreen";
 import {
+  AttemptView,
   Download,
   EditEverything,
   EditSection,
@@ -51,6 +52,7 @@ function GuidedRoutes() {
       <Route path="look" element={<LookPicker />} />
       <Route path="photo" element={<PhotoStep />} />
       <Route path="download" element={<Download />} />
+      <Route path="attempt/:attempt" element={<AttemptView />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

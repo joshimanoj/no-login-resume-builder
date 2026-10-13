@@ -16,8 +16,11 @@ async function answer(page: Page, text: string) {
   await next(page);
 }
 
+/** Types "2023-07" the way a student would: as numbers into the MM / YYYY box. */
 async function month(page: Page, value: string) {
-  await page.locator('input[type="month"]').fill(value);
+  const [year, mm] = value.split("-");
+  await page.getByPlaceholder("MM / YYYY").pressSequentially(`${mm}${year}`);
+  await expect(page.getByPlaceholder("MM / YYYY")).toHaveValue(`${mm} / ${year}`);
   await next(page);
 }
 
@@ -116,7 +119,7 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   // Last step: choose a look, then Your CV -> sign in -> submit
   await expect(page).toHaveURL(/\/look$/);
   await expect(page.getByText("Last step")).toBeVisible();
-  await tap(page, "Use this look");
+  await tap(page, "Use Classic");
   await expect(page).toHaveURL(/\/cv$/);
   await expect(page.locator("text=Asha Rao").first()).toBeVisible();
   await tap(page, "Submit to Curie for review");
@@ -144,11 +147,18 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   // Review 2: accepted -> choose a look -> download
   await expect(page.getByRole("heading", { name: "Accepted!" })).toBeVisible({ timeout: 15_000 });
   await tap(page, "Choose a look");
-  await expect(page.getByText("1 of 9", { exact: false })).toBeVisible();
-  await tap(page, "Use this look");
+  await expect(page.getByRole("radiogroup", { name: "Looks" }).getByRole("radio")).toHaveCount(9);
+  await page.getByRole("radio", { name: "Minimal" }).click();
+  await tap(page, "Use Minimal");
   await expect(page.getByRole("heading", { name: "Your CV is ready to send" })).toBeVisible();
   await expect(page.locator("#resume-preview")).toContainText("Web Development Intern");
   await expect(page.getByRole("button", { name: "Download my CV" })).toBeEnabled();
+
+  // Past attempts are listed on the home page and open as submitted
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(page.getByRole("link", { name: /Attempt 2/ })).toBeVisible();
+  await page.getByRole("link", { name: /Attempt 1/ }).click();
+  await expect(page.getByText("Needs another attempt", { exact: false })).toBeVisible();
 });
 
 test("download is locked until Curie accepts the CV", async ({ page }) => {
@@ -230,4 +240,25 @@ test("on a shared phone, another student can clear the previous CV", async ({ pa
   await page.getByRole("button", { name: "I'm not Asha: start a new CV" }).click();
   await expect(page.getByRole("button", { name: "Let's start" })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("guided-cv-v1") ?? "")).not.toContain("Asha");
+});
+
+test("on a phone, the CV opens from the top bar and peeks after each section", async ({ page }) => {
+  await page.goto("/demo");
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/s/experience.0.about");
+  await page.getByRole("button", { name: "My CV" }).click();
+  const fullView = page.getByRole("dialog", { name: "Your CV, full view" });
+  await expect(fullView).toContainText("Web Development Intern");
+  await expect(fullView.getByRole("button", { name: "Zoom: fit to screen" })).toBeVisible();
+  await fullView.getByRole("button", { name: "Zoom in" }).click();
+  await fullView.getByRole("button", { name: "Zoom in" }).click();
+  await expect(fullView.getByText("75%")).toBeVisible();
+  await fullView.getByRole("button", { name: /Tap to fit to screen/ }).click();
+  await expect(fullView.getByText("Fit", { exact: true })).toBeVisible();
+  await fullView.getByRole("button", { name: "Back" }).click();
+  await expect(fullView).toHaveCount(0);
+
+  await page.goto("/s/experience.check");
+  await page.getByRole("button", { name: "Open your CV" }).click();
+  await expect(fullView).toBeVisible();
 });

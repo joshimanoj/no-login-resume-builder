@@ -1,6 +1,6 @@
 import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
-import { ChevronLeft, Check, Loader2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import { ChevronLeft, Check, Home, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -16,6 +16,7 @@ export function Screen({
   sections,
   wide,
   aside,
+  headerAction,
 }: {
   children: ReactNode;
   progress?: number;
@@ -28,13 +29,17 @@ export function Screen({
   wide?: boolean;
   /** Shown beside the card on wide screens only (e.g. the CV filling in). */
   aside?: ReactNode;
+  /** Shown at the end of the top bar (e.g. the "My CV" button on phones). */
+  headerAction?: ReactNode;
 }) {
   const navigate = useNavigate();
   return (
     <div className="min-h-[100dvh] bg-white text-slate-800 md:bg-slate-100">
-      <header className="hidden h-14 items-center gap-2.5 border-b border-slate-200 bg-white px-6 md:flex">
-        <img src="/Logo2.jpg" alt="" className="h-8 w-auto rounded" />
-        <span className="font-medium">VigyanShaala CV Builder</span>
+      <header className="hidden h-14 items-center border-b border-slate-200 bg-white px-6 md:flex">
+        <Link to="/" className="flex items-center gap-2.5" aria-label="VigyanShaala CV Builder, home">
+          <img src="/Logo2.jpg" alt="" className="h-8 w-auto rounded" />
+          <span className="font-medium">VigyanShaala CV Builder</span>
+        </Link>
       </header>
       <div className="md:flex md:items-start md:justify-center md:gap-6 md:px-6 md:py-8">
       <div
@@ -56,6 +61,11 @@ export function Screen({
                 <ChevronLeft className="h-6 w-6" />
               </button>
             )}
+            {back && (
+              <Link to="/" aria-label="Home" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-primary active:bg-slate-100">
+                <Home className="h-5 w-5" />
+              </Link>
+            )}
             {title && <span className="flex-1 font-medium">{title}</span>}
             {sections && <SectionBar {...sections} />}
             {progress !== undefined && (
@@ -63,6 +73,7 @@ export function Screen({
                 <div className="h-full rounded-full bg-secondary transition-all" style={{ width: `${Math.round(progress * 100)}%` }} />
               </div>
             )}
+            {headerAction}
           </div>
         )}
         {label && <p className="mt-2 text-xs font-medium text-[hsl(88_45%_30%)]">{label}</p>}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import {
@@ -8,6 +8,7 @@ import {
   Briefcase,
   ChevronLeft,
   ChevronRight,
+  FileText,
   FolderKanban,
   GraduationCap,
   Maximize2,
@@ -16,6 +17,8 @@ import {
   Star,
   Trophy,
   User,
+  ZoomIn,
+  ZoomOut,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -38,8 +41,10 @@ import {
 } from "./steps";
 import { sectionIssues } from "./checks";
 import { CvPreview } from "./screens";
+import { PAGE_WIDTH } from "@/components/ScaledPreview";
 import { EXAMPLE_CV } from "./demo";
 import { paragraphToHtml } from "@/utils/plainText";
+import { formatMonthInput, parseMonthInput, toMonthInput } from "@/utils/monthInput";
 import {
   Actions,
   BigButton,
@@ -87,63 +92,149 @@ function TrackedStep({ step, bar, label }: { step: Step; bar: { total: number; c
     window.scrollTo({ top: 0 });
   }, [step.key, update]);
   return (
-    <Screen sections={bar} label={label} aside={<LivePreview />}>
+    <Screen sections={bar} label={label} aside={<LivePreview />} headerAction={<MyCvButton />}>
       {/* key forces fresh local state per step */}
       <StepBody key={step.key} step={step} />
     </Screen>
   );
 }
 
-/** Desktop only: the CV filling in beside the questions, with a full-width document view. */
-function LivePreview() {
+/** The CV she sees while answering: her own once she has entered something, otherwise an example in the chosen look. */
+function useCvPreview() {
   const { state, update } = useGuided();
-  const [full, setFull] = useState(false);
   const index = Math.max(0, TEMPLATE_IDS.indexOf(state.template as TemplateId));
   const id = TEMPLATE_IDS[index];
-  // Trying looks here pre-selects one for the last step, where the choice is confirmed (and a photo added).
-  const step = (by: number) => update((s) => ({ ...s, template: TEMPLATE_IDS[(index + by + TEMPLATE_IDS.length) % TEMPLATE_IDS.length] }));
-  // Until she has written something, show the look with an example CV so it isn't an empty page.
-  const d = state.data;
-  const hasContent = hasEnteredAnything(d);
-  const cv = hasContent ? d : EXAMPLE_CV;
+  const hasContent = hasEnteredAnything(state.data);
+  return {
+    id,
+    hasContent,
+    cv: hasContent ? state.data : EXAMPLE_CV,
+    needsPhoto: templateSupportsPhoto(id) && !state.data.personalInfo.photo,
+    // Trying looks here pre-selects one for the last step, where the choice is confirmed (and a photo added).
+    stepLook: (by: number) => update((s) => ({ ...s, template: TEMPLATE_IDS[(index + by + TEMPLATE_IDS.length) % TEMPLATE_IDS.length] })),
+  };
+}
 
-  useEffect(() => {
-    if (!full) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setFull(false);
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [full]);
-
-  const lookArrows = (
+function LookArrows() {
+  const { stepLook } = useCvPreview();
+  return (
     <>
-      <button type="button" aria-label="Previous look" onClick={() => step(-1)} className="flex h-9 w-9 items-center justify-center rounded-full text-primary hover:bg-slate-100">
+      <button type="button" aria-label="Previous look" onClick={() => stepLook(-1)} className="flex h-9 w-9 items-center justify-center rounded-full text-primary hover:bg-slate-100">
         <ChevronLeft className="h-5 w-5" />
       </button>
-      <button type="button" aria-label="Next look" onClick={() => step(1)} className="flex h-9 w-9 items-center justify-center rounded-full text-primary hover:bg-slate-100">
+      <button type="button" aria-label="Next look" onClick={() => stepLook(1)} className="flex h-9 w-9 items-center justify-center rounded-full text-primary hover:bg-slate-100">
         <ChevronRight className="h-5 w-5" />
       </button>
     </>
   );
-  const notes = (
+}
+
+function PreviewNotes() {
+  const { hasContent, needsPhoto } = useCvPreview();
+  return (
     <>
       {!hasContent && (
         <p className="mb-3 shrink-0 rounded-lg bg-[#eef3f8] px-3 py-2 text-xs text-primary">
           Example: your CV will look like this. It fills in with your details as you answer.
         </p>
       )}
-      {templateSupportsPhoto(id) && !d.personalInfo.photo && (
+      {needsPhoto && (
         <p className="mb-3 shrink-0 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">This look has a photo. You'll add it in the last step.</p>
       )}
     </>
   );
+}
 
+const ZOOM_LEVELS = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+/** Her CV at page width, like a document, over the whole screen, with zoom. Used on desktop and phones. */
+function CvFullView({ onClose }: { onClose: () => void }) {
+  const { id, cv, hasContent } = useCvPreview();
+  // null = fit the page to the screen width; otherwise a fixed zoom (1 = actual size).
+  const [zoom, setZoom] = useState<number | null>(null);
+  const [fit, setFit] = useState(1);
+  const widthRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  useLayoutEffect(() => {
+    const el = widthRef.current;
+    if (!el) return;
+    const measure = () => setFit(Math.min(1, el.clientWidth / PAGE_WIDTH));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  const current = zoom ?? fit;
+  const zoomIn = () => setZoom(ZOOM_LEVELS.find((l) => l > current + 0.01) ?? current);
+  // Zooming out stops at "fit": smaller than the screen width isn't useful.
+  const zoomOut = () => {
+    const smaller = [...ZOOM_LEVELS].reverse().find((l) => l < current - 0.01);
+    setZoom(smaller !== undefined && smaller > fit + 0.01 ? smaller : null);
+  };
+  const zoomButton = "flex h-9 w-9 items-center justify-center rounded-full text-primary hover:bg-slate-100 disabled:opacity-40";
+
+  // Portal: the desktop side panel is sticky, which would keep this overlay underneath the card's Next button.
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex flex-col bg-slate-200" role="dialog" aria-modal="true" aria-label="Your CV, full view">
+      <div className="flex h-14 shrink-0 items-center gap-1 border-b border-slate-300 bg-white px-3 md:px-6">
+        <p className="min-w-0 flex-1 truncate font-medium">
+          Your CV · <span className="font-normal text-slate-600">{TEMPLATE_NAMES[id]}</span>
+        </p>
+        <LookArrows />
+        <button type="button" autoFocus onClick={onClose} className="ml-1 flex h-9 items-center gap-1.5 rounded-full bg-primary px-3.5 text-sm font-medium text-white md:ml-2 md:px-4">
+          <Minimize2 className="h-4 w-4" aria-hidden />
+          <span className="hidden sm:inline">Back to questions</span>
+          <span className="sm:hidden">Back</span>
+        </button>
+      </div>
+      <div className="flex h-11 shrink-0 items-center justify-center gap-1 border-b border-slate-300 bg-white">
+        <button type="button" aria-label="Zoom out" onClick={zoomOut} disabled={zoom === null} className={zoomButton}>
+          <ZoomOut className="h-5 w-5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => setZoom(null)}
+          aria-label={zoom === null ? "Zoom: fit to screen" : `Zoom: ${Math.round(current * 100)}%. Tap to fit to screen`}
+          className="min-w-16 rounded-full px-2 py-1 text-sm font-medium tabular-nums text-slate-700 hover:bg-slate-100"
+        >
+          {zoom === null ? "Fit" : `${Math.round(current * 100)}%`}
+        </button>
+        <button type="button" aria-label="Zoom in" onClick={zoomIn} disabled={current >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]} className={zoomButton}>
+          <ZoomIn className="h-5 w-5" />
+        </button>
+      </div>
+      <div className="flex-1 overflow-auto px-3 py-4 md:px-6 md:py-8">
+        <div ref={widthRef} className="mx-auto max-w-[794px]">
+          <PreviewNotes />
+        </div>
+        {/* A4 width, like a page in a word processor: fitted to the screen, or zoomed (scrolls both ways). */}
+        <div className={`mx-auto bg-white shadow-lg ${zoom === null ? "max-w-[794px]" : "w-fit"} ${hasContent ? "" : "opacity-60"}`}>
+          <CvPreview data={cv} template={id} zoom={zoom ?? undefined} />
+        </div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+/** Desktop only: the CV filling in beside the questions. */
+function LivePreview() {
+  const { id, cv, hasContent } = useCvPreview();
+  const [full, setFull] = useState(false);
   return (
     <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="mb-3 flex shrink-0 items-center gap-1">
         <p className="flex-1 text-sm font-medium text-slate-600">
           Your CV so far · <span className="text-slate-900">{TEMPLATE_NAMES[id]}</span>
         </p>
-        {lookArrows}
+        <LookArrows />
         <button
           type="button"
           onClick={() => setFull(true)}
@@ -152,41 +243,54 @@ function LivePreview() {
           <Maximize2 className="h-4 w-4" /> Full view
         </button>
       </div>
-      {notes}
+      <PreviewNotes />
       <div className={`min-h-0 flex-1 overflow-y-auto ${hasContent ? "" : "opacity-60"}`}>
         <CvPreview data={cv} template={id} />
       </div>
+      {full && <CvFullView onClose={() => setFull(false)} />}
+    </div>
+  );
+}
 
-      {/* Portal: the side panel is sticky, which would keep this overlay underneath the card's Next button. */}
-      {full &&
-        createPortal(
-        <div className="fixed inset-0 z-50 flex flex-col bg-slate-200" role="dialog" aria-modal="true" aria-label="Your CV, full view">
-          <div className="flex h-14 shrink-0 items-center gap-1 border-b border-slate-300 bg-white px-6">
-            <p className="flex-1 font-medium">
-              Your CV · <span className="font-normal text-slate-600">{TEMPLATE_NAMES[id]}</span>
-            </p>
-            {lookArrows}
-            <button
-              type="button"
-              autoFocus
-              onClick={() => setFull(false)}
-              className="ml-2 flex h-9 items-center gap-1.5 rounded-full bg-primary px-4 text-sm font-medium text-white"
-            >
-              <Minimize2 className="h-4 w-4" /> Back to questions
-            </button>
-          </div>
-          <div className="flex-1 overflow-y-auto px-6 py-8">
-            <div className="mx-auto max-w-[794px]">
-              {notes}
-              {/* A4 width, like a page in a word processor. */}
-              <div className={`bg-white shadow-lg ${hasContent ? "" : "opacity-60"}`}>
-                <CvPreview data={cv} template={id} />
-              </div>
-            </div>
-          </div>
-        </div>,
-          document.body,
-        )}
+/** Phones and tablets: a "My CV" button in the top bar opens the full view. Desktop has the side panel instead. */
+function MyCvButton() {
+  const [full, setFull] = useState(false);
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setFull(true)}
+        className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-slate-200 px-3 text-sm font-medium text-primary active:bg-slate-50 lg:hidden"
+      >
+        <FileText className="h-4 w-4" aria-hidden /> My CV
+      </button>
+      {full && <CvFullView onClose={() => setFull(false)} />}
+    </>
+  );
+}
+
+/** Phones and tablets: a glimpse of the CV growing, shown when a section is done. Tap to open it. */
+function CvPeek() {
+  const { id, cv, hasContent } = useCvPreview();
+  const [full, setFull] = useState(false);
+  return (
+    <div className="mt-5 lg:hidden">
+      <button
+        type="button"
+        onClick={() => setFull(true)}
+        aria-label="Open your CV"
+        className="relative block h-56 w-full overflow-hidden rounded-xl border border-slate-200 bg-white text-left"
+      >
+        <div className={hasContent ? "" : "opacity-60"}>
+          <CvPreview data={cv} template={id} />
+        </div>
+        <span className="absolute inset-x-0 bottom-0 flex h-16 items-end justify-center bg-gradient-to-t from-white via-white/90 to-transparent pb-2.5">
+          <span className="flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-sm font-medium text-white">
+            <Maximize2 className="h-3.5 w-3.5" aria-hidden /> See your CV so far
+          </span>
+        </span>
+      </button>
+      {full && <CvFullView onClose={() => setFull(false)} />}
     </div>
   );
 }
@@ -456,30 +560,37 @@ const thisMonth = () => new Date().toISOString().slice(0, 7);
 
 function MonthStep({ step }: { step: StepOf<"month"> }) {
   const { state, advance } = useGuided();
-  const [value, setValue] = useState(() => step.get(state));
+  // Typed as numbers: the browser's month picker confuses students on Android.
+  const [text, setText] = useState(() => toMonthInput(step.get(state)));
   const [error, setError] = useState<string | null>(null);
   return (
     <form
       className="flex flex-1 flex-col"
       onSubmit={(e) => {
         e.preventDefault();
-        if (!value) return;
-        if (step.noFuture && value > thisMonth()) return setError("This can't be in the future.");
-        advance(step.set(state, value), step.key);
+        if (!text) return;
+        const parsed = parseMonthInput(text);
+        if ("error" in parsed) return setError(parsed.error);
+        if (step.noFuture && parsed.value > thisMonth()) return setError("This can't be in the future.");
+        advance(step.set(state, parsed.value), step.key);
       }}
     >
       <Question>{step.q}</Question>
-      {step.hint && <Hint>{step.hint}</Hint>}
+      <Hint>Month and year, as numbers. For example 07 / 2023.</Hint>
       <TextInput
-        className="mt-5"
-        type="month"
-        value={value}
-        max={step.noFuture ? thisMonth() : undefined}
-        onChange={(e) => (setValue(e.target.value), setError(null))}
+        className="mt-5 tracking-wide"
+        autoFocus
+        inputMode="numeric"
+        enterKeyHint="next"
+        autoComplete="off"
+        placeholder="MM / YYYY"
+        aria-label={`${step.q} Month and year`}
+        value={text}
+        onChange={(e) => (setText(formatMonthInput(e.target.value)), setError(null))}
       />
       <FieldError>{error}</FieldError>
       <Actions>
-        <BigButton type="submit" disabled={!value}>
+        <BigButton type="submit" disabled={!text}>
           Next
         </BigButton>
         {step.skip ? (
@@ -989,6 +1100,7 @@ function CheckStep({ step }: { step: StepOf<"check"> }) {
         </div>
       ))}
       {issues.length > 0 && <Hint>You'll need to fix this before you submit your CV to Curie.</Hint>}
+      <CvPeek />
       <Actions>
         <BigButton tone={issues.length ? "outline" : "primary"} onClick={() => (nextSection ? advance(state, step.key) : navigate("/look"))}>
           {`${issues.length ? "Fix later, continue" : "Continue"} to ${nextSection ? nextSection.label : "choose a look"}`}
