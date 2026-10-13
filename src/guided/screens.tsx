@@ -261,13 +261,9 @@ export function YourCv() {
       {editedAfterAccept && <Banner tone="info">You changed your CV after Curie accepted it. Submit it again if you'd like a new review.</Banner>}
       {rejected && !reviewing && <Banner tone="warn">Curie asked for another attempt. Improve the sections in your review, then submit again.</Banner>}
 
-      <div className="mt-3">
-        <CvPreview data={state.data} template={state.template} />
-      </div>
-
-      {/* Secondary actions stay in the page; only the main action sticks to the bottom. */}
+      {/* Things she may want to do before submitting, so they come first. */}
       {!reviewing && (
-        <div className="mt-3 grid grid-cols-2 gap-2.5">
+        <div className="mt-2 grid grid-cols-2 gap-2.5">
           <SecondaryButton icon={LayoutTemplate} onClick={() => navigate("/look")}>
             Change the look
           </SecondaryButton>
@@ -282,8 +278,12 @@ export function YourCv() {
         </div>
       )}
 
+      <div className="mt-3">
+        <CvPreview data={state.data} template={state.template} />
+      </div>
+
       <Actions>
-        <div className="space-y-2.5">
+        <div className="space-y-1.5">
           {reviewing ? (
             <BigButton onClick={() => navigate("/review")}>Check the review status</BigButton>
           ) : acceptedNow ? null : failing ? (
@@ -293,10 +293,19 @@ export function YourCv() {
               {rejected || editedAfterAccept ? "Submit again" : "Submit to Curie for review"}
             </BigButton>
           )}
-          {downloadReady ? (
-            <BigButton tone={acceptedNow ? "green" : "outline"} onClick={() => navigate("/download")}>
+          {/* Submitting to Curie is the main action; download is a smaller option, unless she's already accepted. */}
+          {downloadReady && acceptedNow ? (
+            <BigButton tone="green" onClick={() => navigate("/download")}>
               <FileDown className="h-5 w-5" aria-hidden /> Download my CV
             </BigButton>
+          ) : downloadReady ? (
+            <button
+              type="button"
+              onClick={() => navigate("/download")}
+              className="mx-auto flex min-h-10 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-primary hover:bg-slate-50"
+            >
+              <FileDown className="h-4 w-4" aria-hidden /> Download my CV
+            </button>
           ) : (
             <Hint className="text-center">Add the required details to download your CV.</Hint>
           )}
