@@ -22,7 +22,7 @@ export function Screen({
   progress?: number;
   /** Segmented bar: one segment per section; the current one fills as she answers its questions. */
   sections?: { total: number; current: number; within: number };
-  label?: string;
+  label?: ReactNode;
   back?: boolean;
   title?: string;
   /** A wider card on larger screens, for pages that show the whole CV. */
@@ -76,7 +76,7 @@ export function Screen({
             {headerAction}
           </div>
         )}
-        {label && <p className="mt-2 text-xs font-medium text-[hsl(88_45%_30%)]">{label}</p>}
+        {label && <div className="mt-2 text-xs font-medium text-[hsl(88_45%_30%)]">{label}</div>}
         <div className="flex flex-1 flex-col">{children}</div>
       </div>
       {aside && (

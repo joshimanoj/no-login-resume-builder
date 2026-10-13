@@ -50,8 +50,7 @@ export type Step =
       get: Get<string>;
       set: Set<string>;
     })
-  | (Base & { kind: "prompts"; index: number })
-  | (Base & { kind: "bullets"; index: number })
+  | (Base & { kind: "describe"; index: number })
   | (Base & { kind: "tools"; index: number })
   | (Base & { kind: "more" })
   | (Base & { kind: "summary" })
@@ -227,7 +226,11 @@ function educationSteps(s: S): Step[] {
       options: ["Percentage", "GPA (out of 10)"],
       get: () => (item.scoreType === "percentage" ? "Percentage" : item.scoreType === "gpa" ? "GPA (out of 10)" : ""),
       set: (st, v) => setItem(st, sec, i, { scoreType: v === "Percentage" ? "percentage" : "gpa" }),
-      skip: { label: "I don't have marks yet", apply: (st) => setItem(st, sec, i, { scoreType: undefined, gpa: "" }) },
+      // Marks are required, except for a degree she's still in: a 1st-year student has none yet.
+      skip:
+        item.current && !school
+          ? { label: "I don't have marks yet", apply: (st) => setItem(st, sec, i, { scoreType: undefined, gpa: "" }) }
+          : undefined,
     });
     if (item.scoreType) {
       steps.push({
@@ -280,8 +283,7 @@ function experienceSteps(s: S): Step[] {
         get: () => toMonth(str(item.endDate)), set: (st, v) => setItem(st, sec, i, { endDate: fromMonth(v) }),
       });
     }
-    steps.push({ kind: "prompts", key: `${k}.about`, section: sec, index: i });
-    steps.push({ kind: "bullets", key: `${k}.points`, section: sec, index: i });
+    steps.push({ kind: "describe", key: `${k}.about`, section: sec, index: i });
     return steps;
   });
 }
@@ -300,8 +302,7 @@ function projectSteps(s: S): Step[] {
         get: () => toMonth(str(item.date)), set: (st, v) => setItem(st, sec, i, { date: fromMonth(v) }),
       },
       { kind: "tools", key: `${k}.tools`, section: sec, index: i },
-      { kind: "prompts", key: `${k}.about`, section: sec, index: i },
-      { kind: "bullets", key: `${k}.points`, section: sec, index: i },
+      { kind: "describe", key: `${k}.about`, section: sec, index: i },
     ];
   });
 }
@@ -319,8 +320,7 @@ function achievementSteps(s: S): Step[] {
         kind: "month", key: `${k}.date`, section: sec, q: "When?", skip: "Skip",
         get: () => toMonth(str(item.date)), set: (st, v) => setItem(st, sec, i, { date: fromMonth(v) }),
       },
-      { kind: "prompts", key: `${k}.about`, section: sec, index: i },
-      { kind: "bullets", key: `${k}.points`, section: sec, index: i },
+      { kind: "describe", key: `${k}.about`, section: sec, index: i },
     ];
   });
 }

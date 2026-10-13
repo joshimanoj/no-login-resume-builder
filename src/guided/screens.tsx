@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, FileDown, MessageSquareText, Sparkles } from "lucide-react";
+import { ChevronRight, FileDown, MessageSquareText, Sparkles } from "lucide-react";
 import { ResumePreview } from "@/components/ResumePreview";
 import { ResumeForm } from "@/components/ResumeForm";
 import { PhotoCropDialog } from "@/components/PhotoCropDialog";
@@ -29,7 +29,7 @@ import {
   type Submission,
 } from "./state";
 import { addItem, buildSteps, firstStepOfItem, firstStepOfSection, isListSection, items, optInKey, sectionIncluded, setAnswer } from "./steps";
-import { allSectionsPass, firstFailingSection, sectionIssues } from "./checks";
+import { STATUS_TEXT, allSectionsPass, firstFailingSection, sectionIssues, sectionStatus } from "./checks";
 import { createSubmission, fetchReview, requestReview, signInWithGoogle, usingMock } from "./backend";
 import { Actions, BigButton, CurieAvatar, Hint, LinkButton, Question, Screen, Spacer, Stars } from "./ui";
 
@@ -97,7 +97,6 @@ export function Welcome() {
         <Question>
           <span className="mt-8 block text-[26px] md:mt-4 md:text-[28px]">Build your CV, one small step at a time</span>
         </Question>
-        <Hint className="text-[15px]">About 20 minutes. Works even if you have no work experience.</Hint>
         <p className="mt-7 text-xs font-medium uppercase tracking-wide text-slate-500">How it works</p>
         <ol className="mt-3 space-y-4">
           {HOW_IT_WORKS.map(({ icon: Icon, title, text }, k) => (
@@ -116,7 +115,7 @@ export function Welcome() {
         </ol>
         <Actions>
           <BigButton tone="green" onClick={() => goStep(steps[0].key)}>
-            Let's start
+            {state.user ? "Let's start" : "Let's start without signing in"}
           </BigButton>
           {state.user ? (
             <p className="mt-3 text-center text-sm text-slate-600">
@@ -306,9 +305,7 @@ export function EditEverything() {
       <Hint>Every part of your CV. Tap a section to change, add, or delete anything.</Hint>
       <div className="mt-4 space-y-2">
         {SECTIONS.map((d) => {
-          const included = sectionIncluded(state, d.id);
-          const n = isListSection(d.id) ? items(state, d.id).length : d.id === "skills" ? state.data.skills.length : null;
-          const issues = sectionIssues(state, d.id).length;
+          const status = sectionStatus(state, d.id);
           return (
             <button
               key={d.id}
@@ -317,8 +314,8 @@ export function EditEverything() {
               className="flex min-h-[52px] w-full items-center gap-3 rounded-xl border border-slate-200 px-3.5 text-left text-[15px]"
             >
               <span className="flex-1">{d.label}</span>
-              <span className={`text-xs ${issues ? "text-[#854F0B]" : "text-slate-500"}`}>
-                {issues ? "Needs something" : !included ? "Not added" : n !== null ? `${n}` : "Done"}
+              <span className={`text-xs ${status === "needs" ? "text-[#854F0B]" : status === "done" ? "text-[#3b6d11]" : "text-slate-500"}`}>
+                {STATUS_TEXT[status]}
               </span>
               <ChevronRight className="h-4 w-4 text-slate-400" />
             </button>

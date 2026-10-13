@@ -7,8 +7,8 @@ import {
   validateSkills,
   type ResumeData,
 } from "@/utils/resumeRules";
-import { SECTIONS, type GuidedState, type SectionId } from "./state";
-import { firstStepOfItem, firstStepOfSection, isBachelors, sectionIncluded } from "./steps";
+import { SECTIONS, type GuidedState, type ListSection, type SectionId } from "./state";
+import { firstStepOfItem, firstStepOfSection, isBachelors, isSchool, items, optInKey, sectionIncluded } from "./steps";
 
 export interface Issue {
   message: string;
@@ -65,6 +65,12 @@ export function sectionIssues(s: GuidedState, section: SectionId): Issue[] {
   if (message) issues.push({ message: friendly(message), target: targetFor(s, section, message) });
 
   if (section === "education") {
+    s.data.education.forEach((e, i) => {
+      // Marks can be left out only for a degree she's still studying.
+      if (!e.gpa?.trim() && (!e.current || isSchool(e.degree))) {
+        issues.push({ message: `Add your marks for ${e.degree.trim() || `education ${i + 1}`}.`, target: `education.${i}.scoreType` });
+      }
+    });
     const degrees = s.data.education.map((e) => e.degree.trim());
     if (degrees.length === 0) {
       issues.push({ message: "Add what you're studying now.", target: "education.intro" });
@@ -86,3 +92,20 @@ export function sectionIssues(s: GuidedState, section: SectionId): Issue[] {
 export const allSectionsPass = (s: GuidedState) => SECTIONS.every((d) => sectionIssues(s, d.id).length === 0);
 
 export const firstFailingSection = (s: GuidedState) => SECTIONS.find((d) => sectionIssues(s, d.id).length > 0);
+
+export type SectionStatus = "done" | "needs" | "skipped" | "todo";
+
+export const STATUS_TEXT: Record<SectionStatus, string> = { done: "Done", needs: "Needs something", skipped: "Skipped", todo: "Not started" };
+
+/** How far she is with a section, for the sections list and Edit everything. */
+export function sectionStatus(s: GuidedState, id: SectionId): SectionStatus {
+  if (!sectionIncluded(s, id)) return s.answers[optInKey(id)] === false ? "skipped" : "todo";
+  const started =
+    id === "personal"
+      ? Object.values(s.data.personalInfo).some((v) => v?.trim())
+      : id === "skills"
+        ? s.data.skills.length > 0
+        : items(s, id as ListSection).length > 0;
+  if (!started) return "todo";
+  return sectionIssues(s, id).length ? "needs" : "done";
+}

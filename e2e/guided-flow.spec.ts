@@ -42,7 +42,7 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   await page.evaluate(() => localStorage.clear());
   await page.goto("/");
 
-  await tap(page, "Let's start");
+  await tap(page, "Let's start without signing in");
 
   // 1. Personal Information
   await tap(page, "Start this section");
@@ -52,6 +52,9 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   await answer(page, "Nashik, Maharashtra");
   await tap(page, "No"); // LinkedIn
   await tap(page, "No"); // website
+  // Her own words by default; the fill-in-the-blanks help is one tap away.
+  await expect(page.getByRole("textbox", { name: "Professional summary" })).toBeVisible();
+  await tap(page, "Need help? Fill in the blanks");
   const blanks = page.getByRole("textbox");
   await blanks.nth(0).fill("3rd-year B.Sc. Physics");
   await blanks.nth(1).fill("K.T.H.M. College, Nashik");
@@ -92,13 +95,17 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   await month(page, "2025-06");
   await tap(page, "No"); // still doing it
   await month(page, "2025-08");
+  // Points in her own words, plus the optional three-question helper.
+  await page.getByRole("textbox", { name: "Point 1", exact: true }).fill("Worked with the design team.");
+  await tap(page, "Need help? Answer 3 short questions");
   const boxes = page.getByRole("textbox");
   await boxes.nth(0).fill("made 5 pages of the company website");
   await boxes.nth(1).fill("HTML, CSS and Git");
   await boxes.nth(2).fill("the website went live for 200 customers");
+  await tap(page, "Turn these into points");
+  await expect(page.getByRole("textbox", { name: "Point 1", exact: true })).toHaveValue("Worked with the design team.");
+  await expect(page.getByRole("textbox", { name: "Point 2", exact: true })).toHaveValue("Made 5 pages of the company website.");
   await next(page);
-  await expect(page.getByRole("textbox", { name: "Point 1", exact: true })).toHaveValue("Made 5 pages of the company website.");
-  await tap(page, "Looks good");
   await tap(page, "No, move on");
   await tap(page, "Continue to Skills");
 
@@ -173,7 +180,7 @@ test("the demo opens on the landing page, pre-filled", async ({ page }) => {
   await page.goto("/demo");
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("button", { name: /Sign in with Google to save your CV/ })).toBeVisible();
-  await page.getByRole("button", { name: "Let's start" }).click();
+  await page.getByRole("button", { name: "Let's start without signing in" }).click();
   await page.getByRole("button", { name: "Start this section" }).click();
   await expect(page.getByRole("textbox")).toHaveValue("Asha Rao");
 });
@@ -183,7 +190,7 @@ test("the demo CV passes every section check and can be submitted", async ({ pag
   await expect(page).toHaveURL(/\/cv$/);
   await expect(page.getByRole("button", { name: "Submit to Curie for review" })).toBeVisible();
   await page.goto("/s/experience.0.about");
-  await expect(page.getByRole("textbox").first()).toHaveValue("built 5 pages of the company website");
+  await expect(page.getByRole("textbox", { name: "Point 1", exact: true })).toHaveValue("Built 5 pages of the company website.");
 });
 
 test("editing a section uses plain boxes, not a formatting toolbar", async ({ page }) => {
@@ -238,7 +245,7 @@ test("on a shared phone, another student can clear the previous CV", async ({ pa
 
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "I'm not Asha: start a new CV" }).click();
-  await expect(page.getByRole("button", { name: "Let's start" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Let's start without signing in" })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("guided-cv-v1") ?? "")).not.toContain("Asha");
 });
 
@@ -261,4 +268,30 @@ test("on a phone, the CV opens from the top bar and peeks after each section", a
   await page.goto("/s/experience.check");
   await page.getByRole("button", { name: "Open your CV" }).click();
   await expect(fullView).toBeVisible();
+});
+
+test("from any question she can see every section and jump to one", async ({ page }) => {
+  await page.goto("/demo");
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/s/skills.pick");
+  await page.getByRole("button", { name: /Skills · 4 of 9/ }).click();
+  const list = page.getByRole("dialog");
+  await expect(list.getByText("Your sections")).toBeVisible();
+  await expect(list.getByRole("button")).toContainText(["1. Personal Information", "2. Education", "3. Work Experience"]);
+  await list.getByRole("button", { name: /2\. Education/ }).click();
+  await expect(page).toHaveURL(/\/edit\/education$/);
+});
+
+test("marks can be left out only for a degree she's still studying", async ({ page }) => {
+  await page.goto("/demo");
+  await expect(page).toHaveURL(/\/$/);
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem("guided-cv-v1") ?? "{}");
+    saved.data.education[1].gpa = ""; // Class 12, finished
+    saved.data.education[0].gpa = ""; // current B.Sc.
+    localStorage.setItem("guided-cv-v1", JSON.stringify(saved));
+  });
+  await page.goto("/s/education.check");
+  await expect(page.getByText("Add your marks for Class 12.")).toBeVisible();
+  await expect(page.getByText("Add your marks for B.Sc..")).toHaveCount(0);
 });

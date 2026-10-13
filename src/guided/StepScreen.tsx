@@ -1,4 +1,5 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { createPortal } from "react-dom";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
 import {
@@ -6,6 +7,7 @@ import {
   BadgeCheck,
   BookOpen,
   Briefcase,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   FileText,
@@ -39,7 +41,7 @@ import {
   setItem,
   type Step,
 } from "./steps";
-import { sectionIssues } from "./checks";
+import { STATUS_TEXT, sectionIssues, sectionStatus, type SectionStatus } from "./checks";
 import { CvPreview } from "./screens";
 import { PAGE_WIDTH } from "@/components/ScaledPreview";
 import { EXAMPLE_CV } from "./demo";
@@ -73,19 +75,18 @@ export function StepScreen() {
   if (index === -1) return <Navigate to={`/s/${steps[0].key}`} replace />;
 
   const step = steps[index];
-  const def = sectionDef(step.section);
   const inSection = steps.filter((s) => s.section === step.section);
   const within = (inSection.findIndex((s) => s.key === step.key) + 1) / inSection.length;
   return (
     <TrackedStep
       step={step}
       bar={{ total: SECTIONS.length, current: sectionNumber(step.section), within }}
-      label={`${def.label} · ${sectionNumber(step.section)} of ${SECTIONS.length}`}
+      label={<SectionsMenu current={step.section} />}
     />
   );
 }
 
-function TrackedStep({ step, bar, label }: { step: Step; bar: { total: number; current: number; within: number }; label: string }) {
+function TrackedStep({ step, bar, label }: { step: Step; bar: { total: number; current: number; within: number }; label: ReactNode }) {
   const { update } = useGuided();
   useEffect(() => {
     update((s) => (s.lastStep === step.key ? s : { ...s, lastStep: step.key }));
@@ -96,6 +97,68 @@ function TrackedStep({ step, bar, label }: { step: Step; bar: { total: number; c
       {/* key forces fresh local state per step */}
       <StepBody key={step.key} step={step} />
     </Screen>
+  );
+}
+
+/**
+ * "Personal Information · 1 of 9" is also the way to move around: it opens all 9 sections with their
+ * status. A started section opens as one form to review and edit; others open at their first question.
+ */
+function SectionsMenu({ current }: { current: SectionId }) {
+  const { state, goStep } = useGuided();
+  const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
+  const def = sectionDef(current);
+  const go = (id: SectionId, status: SectionStatus) => {
+    setOpen(false);
+    if (status === "done" || status === "needs") navigate(`/edit/${id}`);
+    else goStep(`${id}.intro`);
+  };
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <button type="button" className="-ml-1 inline-flex min-h-8 items-center gap-1 rounded-full px-1 py-0.5 hover:bg-[#eaf5e4]">
+          {def.label} · {sectionNumber(current)} of {SECTIONS.length}
+          <ChevronDown className="h-3.5 w-3.5" aria-hidden />
+          <span className="sr-only">. Show all sections</span>
+        </button>
+      </SheetTrigger>
+      <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-2xl border-none bg-white text-slate-800 md:mx-auto md:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Your sections</SheetTitle>
+        </SheetHeader>
+        <p className="mt-1 text-sm text-slate-500">Go to any section. You can come back to this one later.</p>
+        <ul className="mt-3 divide-y divide-slate-100">
+          {SECTIONS.map((d, k) => {
+            const status = sectionStatus(state, d.id);
+            const Icon = SECTION_ICONS[d.id];
+            return (
+              <li key={d.id}>
+                <button
+                  type="button"
+                  onClick={() => go(d.id, status)}
+                  aria-current={d.id === current ? "step" : undefined}
+                  className={`flex min-h-[52px] w-full items-center gap-3 rounded-lg px-2 text-left ${d.id === current ? "bg-[#eef3f8]" : "hover:bg-slate-50"}`}
+                >
+                  <Icon className="h-5 w-5 shrink-0 text-primary" aria-hidden />
+                  <span className="flex-1 text-[15px]">
+                    {k + 1}. {d.label}
+                  </span>
+                  <span
+                    className={`text-xs ${
+                      status === "done" ? "text-[#3b6d11]" : status === "needs" ? "text-[#854F0B]" : "text-slate-400"
+                    }`}
+                  >
+                    {status === "done" ? "✓ " : status === "needs" ? "! " : ""}
+                    {STATUS_TEXT[status]}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -307,10 +370,8 @@ function StepBody({ step }: { step: Step }) {
       return <YesNoStep step={step} />;
     case "month":
       return <MonthStep step={step} />;
-    case "prompts":
-      return <PromptsStep step={step} />;
-    case "bullets":
-      return <BulletsStep step={step} />;
+    case "describe":
+      return <DescribeStep step={step} />;
     case "tools":
       return <ToolsStep step={step} />;
     case "more":
@@ -613,57 +674,11 @@ const PROMPTS = [
 
 const itemSection = (step: Step) => step.section as ListSection;
 
-function PromptsStep({ step }: { step: StepOf<"prompts"> }) {
-  const { state, advance } = useGuided();
-  const sec = itemSection(step);
-  const item = items(state, sec)[step.index];
-  const previous = state.prompts[item.id] ?? ["", "", ""];
-  const [boxes, setBoxes] = useState(previous);
-  const [error, setError] = useState<string | null>(null);
-
-  const next = () => {
-    if (boxes.some(hasNonLatinScript)) return setError(ENGLISH_ONLY);
-    const description = String(item.description ?? "");
-    // Only rebuild the points if she hasn't edited them since they were made from these boxes.
-    const untouched = !description || description === promptsToHtml(previous);
-    let s: GuidedState = { ...state, prompts: { ...state.prompts, [item.id]: boxes } };
-    if (untouched) s = setItem(s, sec, step.index, { description: promptsToHtml(boxes) });
-    advance(s, step.key);
-  };
-
-  return (
-    <>
-      <Question>Tell me about it</Question>
-      <Hint>In your own words. Short is fine. Skip any box.</Hint>
-      {PROMPTS.map(([label, help], k) => (
-        <div key={label} className="mt-4">
-          <label className="text-sm font-medium" htmlFor={`prompt-${k}`}>
-            {label}
-          </label>
-          <TextArea
-            id={`prompt-${k}`}
-            className="mt-1.5"
-            rows={2}
-            value={boxes[k]}
-            onChange={(e) => {
-              const copy = [...boxes];
-              copy[k] = e.target.value;
-              setBoxes(copy);
-              setError(null);
-            }}
-          />
-          <p className="mt-1 text-xs text-slate-400">{help}</p>
-        </div>
-      ))}
-      <FieldError>{error}</FieldError>
-      <Actions>
-        <BigButton onClick={next}>Next</BigButton>
-      </Actions>
-    </>
-  );
-}
-
-function BulletsStep({ step }: { step: StepOf<"bullets"> }) {
+/**
+ * "Describe it": her own points first, one per box, the way she has been taught. For a student who
+ * is stuck, "Need help?" asks three short questions and turns the answers into points she can edit.
+ */
+function DescribeStep({ step }: { step: StepOf<"describe"> }) {
   const { state, advance } = useGuided();
   const sec = itemSection(step);
   const item = items(state, sec)[step.index];
@@ -671,12 +686,62 @@ function BulletsStep({ step }: { step: StepOf<"bullets"> }) {
     const b = htmlToBullets(String(item.description ?? ""));
     return b.length ? b : [""];
   });
+  const [helping, setHelping] = useState(false);
+  const [boxes, setBoxes] = useState(() => state.prompts[item.id] ?? ["", "", ""]);
   const [error, setError] = useState<string | null>(null);
+
+  const usePrompts = () => {
+    if (boxes.some(hasNonLatinScript)) return setError(ENGLISH_ONLY);
+    const made = htmlToBullets(promptsToHtml(boxes));
+    const own = points.filter((p) => p.trim());
+    setPoints(made.length ? [...own, ...made] : points);
+    setHelping(false);
+  };
+
+  const save = () => {
+    if (points.some(hasNonLatinScript)) return setError(ENGLISH_ONLY);
+    const s: GuidedState = { ...state, prompts: { ...state.prompts, [item.id]: boxes } };
+    advance(setItem(s, sec, step.index, { description: bulletsToHtml(points) }), step.key);
+  };
+
+  if (helping) {
+    return (
+      <>
+        <Question>Three short questions</Question>
+        <Hint>Answer in your own words. Short is fine. Skip any box.</Hint>
+        {PROMPTS.map(([label, help], k) => (
+          <div key={label} className="mt-4">
+            <label className="text-sm font-medium" htmlFor={`prompt-${k}`}>
+              {label}
+            </label>
+            <TextArea
+              id={`prompt-${k}`}
+              className="mt-1.5"
+              rows={2}
+              value={boxes[k]}
+              onChange={(e) => {
+                const copy = [...boxes];
+                copy[k] = e.target.value;
+                setBoxes(copy);
+                setError(null);
+              }}
+            />
+            <p className="mt-1 text-xs text-slate-400">{help}</p>
+          </div>
+        ))}
+        <FieldError>{error}</FieldError>
+        <Actions>
+          <BigButton onClick={usePrompts}>Turn these into points</BigButton>
+          <LinkButton onClick={() => setHelping(false)}>Back to my points</LinkButton>
+        </Actions>
+      </>
+    );
+  }
 
   return (
     <>
-      <Question>Your points</Question>
-      <Hint>This is how they'll appear on your CV. Change anything you like.</Hint>
+      <Question>Describe it</Question>
+      <Hint>A few points, one per box. Start each with an action word: made, built, taught, organised.</Hint>
       <div className="mt-4 space-y-2.5">
         {points.map((p, k) => (
           <div key={k} className="flex items-start gap-2">
@@ -698,7 +763,7 @@ function BulletsStep({ step }: { step: StepOf<"bullets"> }) {
               type="button"
               aria-label={`Remove point ${k + 1}`}
               className="mt-1 flex h-11 w-11 shrink-0 items-center justify-center text-slate-400"
-              onClick={() => setPoints(points.filter((_, j) => j !== k))}
+              onClick={() => setPoints(points.length > 1 ? points.filter((_, j) => j !== k) : [""])}
             >
               <X className="h-4 w-4" />
             </button>
@@ -708,16 +773,17 @@ function BulletsStep({ step }: { step: StepOf<"bullets"> }) {
       <button type="button" className="mt-2 flex min-h-11 items-center gap-1 text-[15px] text-primary" onClick={() => setPoints([...points, ""])}>
         <Plus className="h-4 w-4" /> Add another point
       </button>
+      <button
+        type="button"
+        onClick={() => setHelping(true)}
+        className="mt-3 flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl bg-[#eef3f8] px-3 text-sm font-medium text-primary"
+      >
+        Need help? Answer 3 short questions
+      </button>
       <FieldError>{error}</FieldError>
       <Actions>
-        <BigButton
-          onClick={() => {
-            if (points.some(hasNonLatinScript)) return setError(ENGLISH_ONLY);
-            advance(setItem(state, sec, step.index, { description: bulletsToHtml(points) }), step.key);
-          }}
-        >
-          Looks good
-        </BigButton>
+        <BigButton onClick={save}>Next</BigButton>
+        <SkipForNow step={step} />
       </Actions>
     </>
   );
@@ -853,8 +919,9 @@ function SummaryStep({ step }: { step: StepOf<"summary"> }) {
   const { state, advance } = useGuided();
   const existing = htmlToBullets(state.data.personalInfo.summary).join(" ");
   const savedParts = state.prompts["summary"] ?? ["", "", "", ""];
-  const startedOwn = Boolean(existing) && existing !== composeSummary(savedParts);
-  const [own, setOwn] = useState(startedOwn);
+  // Her own words by default; the fill-in-the-blanks help only reopens if that's how she wrote it.
+  const usedBlanks = Boolean(existing) && existing === composeSummary(savedParts);
+  const [own, setOwn] = useState(!usedBlanks);
   const [parts, setParts] = useState(savedParts);
   const [text, setText] = useState(existing);
   const [error, setError] = useState<string | null>(null);
@@ -874,9 +941,16 @@ function SummaryStep({ step }: { step: StepOf<"summary"> }) {
   return (
     <>
       <Question>Your professional summary</Question>
-      <Hint>2 to 3 lines at the top of your CV. {own ? "Write it in your own words." : "Fill in the blanks."}</Hint>
+      <Hint>2 to 3 lines at the top of your CV: who you are, what you're good at, and what you're looking for.</Hint>
       {own ? (
-        <TextArea className="mt-4" rows={6} value={text} autoFocus onChange={(e) => (setText(e.target.value), setError(null))} />
+        <TextArea
+          className="mt-4"
+          rows={6}
+          aria-label="Professional summary"
+          value={text}
+          autoFocus
+          onChange={(e) => (setText(e.target.value), setError(null))}
+        />
       ) : (
         <div className="mt-4 space-y-3">
           {STARTERS.map(([before, example], k) => (
@@ -904,16 +978,26 @@ function SummaryStep({ step }: { step: StepOf<"summary"> }) {
         </div>
       )}
       <FieldError>{error}</FieldError>
-      <button
-        type="button"
-        className="mt-3 min-h-11 text-left text-[15px] text-primary"
-        onClick={() => {
-          if (!own) setText(finalText);
-          setOwn(!own);
-        }}
-      >
-        {own ? "Use the fill-in-the-blanks help instead" : "Write my own instead"}
-      </button>
+      {own ? (
+        <button
+          type="button"
+          onClick={() => setOwn(false)}
+          className="mt-3 flex min-h-11 w-full items-center justify-center rounded-xl bg-[#eef3f8] px-3 text-sm font-medium text-primary"
+        >
+          Need help? Fill in the blanks
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="mt-3 min-h-11 text-left text-[15px] text-primary"
+          onClick={() => {
+            setText(finalText);
+            setOwn(true);
+          }}
+        >
+          Write it in my own words instead
+        </button>
+      )}
       <p className="text-xs text-slate-400">You can come back and improve this once the rest of your CV is done.</p>
       <Actions>
         <BigButton onClick={save} disabled={!finalText.trim()}>
