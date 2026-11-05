@@ -2,12 +2,24 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Download, FileText, User, Briefcase, GraduationCap, Star, Loader2 } from "lucide-react";
+import { Download, FileText, User, Briefcase, GraduationCap, Star, Loader2, Save, ChevronDown } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ResumeForm } from "./ResumeForm";
 import { ResumePreview } from "./ResumePreview";
+import { ResumePreviewFrame } from "./ResumePreviewFrame";
 import { TemplateSelector } from "./TemplateSelector";
 import { DownloadChecklistDialog } from "./DownloadChecklistDialog";
+import { MyCvsDialog, SaveVersionDialog } from "./ResumeAccountDialogs";
+import { useResumeAccount } from "@/hooks/useResumeAccount";
 import { generatePDF, generateWord } from "@/utils/pdfGenerator";
+import { safeDownloadFilename, STORAGE_WAIT_MS, withTimeout, type ReadyDownload } from "@/utils/saveFile";
 import { storeResumeData } from "@/utils/resumeStorage";
 import {
   applyTitleCaseName,
@@ -15,13 +27,27 @@ import {
   type ResumeData,
 } from "@/utils/resumeRules";
 import { SAMPLE_RESUME } from "@/utils/sampleResume";
+import {
+  createBlankResume,
+  isSampleMode,
+  readDraft,
+  resumeSnapshot,
+  type EditorDraft,
+} from "@/utils/resumeAccount";
 import { isTemplateId } from "@/utils/templates";
 
-function resumeFromUrl(): ResumeData {
-  if (typeof window === "undefined") return initialResumeData;
-  return new URLSearchParams(window.location.search).get("sample") === "1"
-    ? SAMPLE_RESUME
-    : initialResumeData;
+function editorStart(): EditorDraft {
+  const templateId = templateFromUrl();
+  if (isSampleMode()) {
+    return { resumeData: SAMPLE_RESUME, templateId, resumeId: null, savedSnapshot: null };
+  }
+  const blank = createBlankResume();
+  return readDraft() ?? {
+    resumeData: blank,
+    templateId,
+    resumeId: null,
+    savedSnapshot: resumeSnapshot(blank, templateId),
+  };
 }
 
 function templateFromUrl(): string {
@@ -32,37 +58,15 @@ function templateFromUrl(): string {
 
 export type { ResumeData };
 
-const initialResumeData: ResumeData = {
-  personalInfo: {
-    fullName: "",
-    email: "",
-    phone: "",
-    location: "",
-    website: "",
-    linkedin: "",
-    summary: "",
-    photo: "",
-  },
-  experience: [],
-  education: [],
-  skills: [
-    { id: "skill-1", name: "", level: "Intermediate" },
-    { id: "skill-2", name: "", level: "Intermediate" },
-  ],
-  projects: [],
-  achievements: [],
-  awards: [],
-  certifications: [],
-  publications: [],
-};
-
 export const ResumeBuilder = () => {
-  const [resumeData, setResumeData] = useState<ResumeData>(resumeFromUrl);
-  const [selectedTemplate, setSelectedTemplate] = useState(templateFromUrl);
+  const [start] = useState(editorStart);
+  const [resumeData, setResumeData] = useState<ResumeData>(start.resumeData);
+  const [selectedTemplate, setSelectedTemplate] = useState(start.templateId);
   const [activeSection, setActiveSection] = useState("personal");
   const [isGeneratingPDF, setIsGeneratingPDF] = useState(false);
   const [isGeneratingWord, setIsGeneratingWord] = useState(false);
   const [checklistOpen, setChecklistOpen] = useState(false);
+  const [readyFile, setReadyFile] = useState<ReadyDownload | null>(null);
   const { toast } = useToast();
 
   const sections = [
@@ -91,6 +95,7 @@ export const ResumeBuilder = () => {
       });
       return;
     }
+    setReadyFile(null);
     setChecklistOpen(true);
   };
 
@@ -107,10 +112,15 @@ export const ResumeBuilder = () => {
     }
     setIsGeneratingPDF(true);
     try {
-      const filename = `${resumeData.personalInfo.fullName.replace(/\s+/g, '_')}_Resume.pdf`;
-      
-      // Store resume data to Supabase
-      const { error: storageError } = await storeResumeData(resumeData, selectedTemplate);
+      const filename = safeDownloadFilename(resumeData.personalInfo.fullName, "pdf");
+
+      let storageError: unknown = null;
+      try {
+        const stored = await withTimeout(storeResumeData(resumeData, selectedTemplate), STORAGE_WAIT_MS);
+        storageError = stored.error;
+      } catch {
+        storageError = "timeout";
+      }
       
       if (storageError) {
         console.error('Failed to store resume data:', storageError);
@@ -124,9 +134,7 @@ export const ResumeBuilder = () => {
         console.log('Resume data stored successfully to Supabase');
       }
       
-      // Generate and download PDF
-      await generatePDF('resume-preview', filename);
-      setChecklistOpen(false);
+      setReadyFile(await generatePDF("resume-preview", filename));
       
     } catch (error) {
       toast({
@@ -151,12 +159,11 @@ export const ResumeBuilder = () => {
     }
     setIsGeneratingWord(true);
     try {
-      const filename = `${resumeData.personalInfo.fullName.replace(/\s+/g, "_")}_Resume.docx`;
-      await generateWord(resumeData, selectedTemplate, filename);
-      setChecklistOpen(false);
+      const filename = safeDownloadFilename(resumeData.personalInfo.fullName, "docx");
+      setReadyFile(await generateWord(resumeData, selectedTemplate, filename));
       toast({
-        title: "Download complete",
-        description: "Your resume has been downloaded as a Word document.",
+        title: "File ready",
+        description: "If the Word file did not save, tap the save button in the checklist.",
       });
     } catch {
       toast({
@@ -169,6 +176,27 @@ export const ResumeBuilder = () => {
     }
   };
 
+  const account = useResumeAccount({
+    resumeData,
+    setResumeData,
+    templateId: selectedTemplate,
+    setTemplateId: setSelectedTemplate,
+    initialResumeId: start.resumeId,
+    initialSavedSnapshot: start.savedSnapshot,
+    onDownload: (kind) => {
+      if (kind === "pdf") void handleDownload();
+      else void handleDownloadWord();
+    },
+  });
+
+  const accountLabel = account.user?.name || account.user?.email || "Signed in";
+  const accountInitials = accountLabel
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("") || "CV";
+
   return (
     <div 
       className="min-h-screen bg-background"
@@ -177,8 +205,8 @@ export const ResumeBuilder = () => {
       
       {/* Header */}
       <header className="border-b bg-gradient-primary text-primary-foreground shadow-elegant">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
+        <div className="container mx-auto px-4 py-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 items-center gap-4">
               <img 
                 src="/Logo2.jpg" 
@@ -186,44 +214,108 @@ export const ResumeBuilder = () => {
                 className="h-12 w-auto shrink-0"
               />
               <div className="min-w-0">
-                <h1 className="text-2xl font-bold leading-tight">VigyanShaala's Free Professional CV Builder</h1>
+                <h1 className="text-xl font-bold leading-tight sm:text-2xl">VigyanShaala's Free Professional CV Builder</h1>
                 <p className="text-primary-foreground/80 text-sm">
                   Create professional resumes and CVs instantly
                 </p>
               </div>
             </div>
-            <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:shrink-0">
-            <Button 
-              onClick={openChecklist} 
-              size="sm" 
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 lg:w-auto" data-testid="header-actions">
+            <Button
+              type="button"
+              onClick={account.saveDraft}
+              size="sm"
               variant="secondary"
-              className="shrink-0 max-lg:min-h-11"
-              disabled={isGeneratingPDF || isGeneratingWord}
-              data-testid="header-download-pdf"
+              className="shrink-0 border border-white/35 bg-white/15 text-white shadow-none hover:bg-white/25 max-lg:min-h-11"
+              disabled={!account.ready || account.saving}
+              data-testid="header-save-cv"
             >
-              {isGeneratingPDF ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Download className="h-4 w-4" />
-              )}
-              <span className="whitespace-nowrap">{isGeneratingPDF ? "Generating..." : "Download PDF"}</span>
+              {account.saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              <span className="whitespace-nowrap">{account.saving ? "Saving..." : "Save"}</span>
             </Button>
-            <Button 
-              onClick={openChecklist} 
-              size="sm" 
-              variant="secondary"
-              className="shrink-0 max-lg:min-h-11"
-              disabled={isGeneratingPDF || isGeneratingWord}
-              data-testid="header-download-word"
-            >
-              {isGeneratingWord ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <FileText className="h-4 w-4" />
-              )}
-              <span className="whitespace-nowrap">{isGeneratingWord ? "Generating..." : "Download Word"}</span>
-            </Button>
-          </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="secondary"
+                  className="shrink-0 bg-white text-[#2c4869] shadow-sm hover:bg-white/90 max-lg:min-h-11"
+                  disabled={isGeneratingPDF || isGeneratingWord}
+                  data-testid="header-download"
+                >
+                  {isGeneratingPDF || isGeneratingWord ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  <span>Download</span>
+                  <ChevronDown className="h-4 w-4 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" collisionPadding={8} className="min-w-[12rem] bg-white text-gray-900">
+                <DropdownMenuItem
+                  className="h-12 cursor-pointer gap-2 px-3"
+                  data-testid="header-download-pdf"
+                  disabled={isGeneratingPDF || isGeneratingWord}
+                  onSelect={openChecklist}
+                >
+                  <Download className="h-4 w-4" />
+                  PDF
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  className="h-12 cursor-pointer gap-2 px-3"
+                  data-testid="header-download-word"
+                  disabled={isGeneratingPDF || isGeneratingWord}
+                  onSelect={openChecklist}
+                >
+                  <FileText className="h-4 w-4" />
+                  Word
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <div className="ml-1 flex items-center" data-testid="header-account">
+            {account.ready && !account.user && (
+              <Button
+                type="button"
+                onClick={() => void account.startGoogleSignIn()}
+                size="sm"
+                variant="secondary"
+                className="shrink-0 border border-white/35 bg-white/15 text-white shadow-none hover:bg-white/25 max-lg:min-h-11"
+                data-testid="header-google-sign-in"
+              >
+                <span className="sm:hidden">Sign in</span>
+                <span className="hidden sm:inline">Sign in with Google</span>
+              </Button>
+            )}
+            {account.user && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="max-w-[14rem] shrink-0 border border-white/35 bg-white/15 text-white shadow-none hover:bg-white/25 max-lg:min-h-11"
+                    data-testid="header-account-menu"
+                  >
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/25 text-[11px] font-semibold" aria-hidden="true">{accountInitials}</span>
+                    <span className="hidden truncate sm:inline" data-testid="header-account-name">{accountLabel}</span>
+                    <ChevronDown className="h-4 w-4 shrink-0 opacity-70" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" collisionPadding={8} className="min-w-[12rem] bg-white text-gray-900">
+                  <DropdownMenuLabel className="truncate font-medium text-gray-900">{accountLabel}</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="h-12 cursor-pointer px-3" onSelect={account.openMyCvs}>
+                    My CVs
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="h-12 cursor-pointer px-3" onSelect={() => account.request({ type: "sign-out" })}>
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            </div>
+            </div>
           </div>
         </div>
       </header>
@@ -240,9 +332,9 @@ export const ResumeBuilder = () => {
         </Card>
 
         {/* Main Builder Interface */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div className="grid min-w-0 grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Form Section */}
-          <div className="space-y-6">
+          <div className="min-w-0 space-y-6">
             {/* Section Navigation */}
             <Card className="shadow-card">
               <CardContent className="p-4">
@@ -276,18 +368,20 @@ export const ResumeBuilder = () => {
           </div>
 
           {/* Preview Section */}
-          <div className="lg:sticky lg:top-8 lg:h-fit">
-            <Card className="shadow-elegant bg-[#2c4869] text-white">
+          <div className="min-w-0 lg:sticky lg:top-8 lg:h-fit">
+            <Card className="min-w-0 overflow-hidden shadow-elegant bg-[#2c4869] text-white">
               <CardHeader>
                 <CardTitle className="text-white">Preview</CardTitle>
               </CardHeader>
-              <CardContent>
-                <div id="resume-preview">
-                  <ResumePreview 
-                    resumeData={resumeData}
-                    template={selectedTemplate}
-                  />
-                </div>
+              <CardContent className="min-w-0">
+                <ResumePreviewFrame>
+                  <div id="resume-preview">
+                    <ResumePreview 
+                      resumeData={resumeData}
+                      template={selectedTemplate}
+                    />
+                  </div>
+                </ResumePreviewFrame>
               </CardContent>
             </Card>
           </div>
@@ -296,10 +390,40 @@ export const ResumeBuilder = () => {
       <DownloadChecklistDialog
         open={checklistOpen}
         onOpenChange={setChecklistOpen}
-        onDownloadPdf={handleDownload}
-        onDownloadWord={handleDownloadWord}
+        onDownloadPdf={() => account.request({ type: "download", kind: "pdf" })}
+        onDownloadWord={() => account.request({ type: "download", kind: "word" })}
         isGeneratingPDF={isGeneratingPDF}
         isGeneratingWord={isGeneratingWord}
+        readyFile={readyFile}
+      />
+      <SaveVersionDialog
+        action={account.prompt}
+        signedIn={Boolean(account.user)}
+        saving={account.saving}
+        onAccept={() => void account.acceptPrompt()}
+        onSkip={account.skipPrompt}
+        onDismiss={account.dismissPrompt}
+      />
+      <MyCvsDialog
+        open={account.myCvsOpen}
+        onOpenChange={account.setMyCvsOpen}
+        resumes={account.resumes}
+        versions={account.versions}
+        loading={account.listLoading}
+        selectedResumeId={account.selectedResumeId}
+        onSelect={account.selectResume}
+        onOpen={(resumeId) => {
+          account.setMyCvsOpen(false);
+          account.request({ type: "open", resumeId });
+        }}
+        onNew={() => {
+          account.setMyCvsOpen(false);
+          account.request({ type: "new" });
+        }}
+        onRestore={(versionId) => {
+          account.setMyCvsOpen(false);
+          account.request({ type: "restore", versionId });
+        }}
       />
     </div>
   );

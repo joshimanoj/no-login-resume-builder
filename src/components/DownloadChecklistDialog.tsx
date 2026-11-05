@@ -24,6 +24,7 @@ interface DownloadChecklistDialogProps {
   onDownloadWord: () => void;
   isGeneratingPDF: boolean;
   isGeneratingWord: boolean;
+  readyFile?: { url: string; filename: string } | null;
 }
 
 const emptyAnswers = (): ChecklistAnswer[] => DOWNLOAD_CHECKLIST.map(() => "");
@@ -35,6 +36,7 @@ export const DownloadChecklistDialog = ({
   onDownloadWord,
   isGeneratingPDF,
   isGeneratingWord,
+  readyFile = null,
 }: DownloadChecklistDialogProps) => {
   const [answers, setAnswers] = useState<ChecklistAnswer[]>(emptyAnswers);
 
@@ -47,9 +49,9 @@ export const DownloadChecklistDialog = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto bg-white text-gray-900">
+      <DialogContent className="!bottom-3 !left-3 !right-3 !top-3 !block !h-auto !max-h-none !w-auto !max-w-none !translate-x-0 !translate-y-0 overflow-y-auto bg-white p-4 text-gray-900 sm:p-6">
         <DialogHeader>
-          <DialogTitle className="text-gray-900">Have you re-read these points?</DialogTitle>
+          <DialogTitle className="pr-8 text-gray-900">Have you re-read these points?</DialogTitle>
           <DialogDescription className="text-gray-600">
             Mark Yes or Not Applicable for every point. Download stays disabled if any point is No or unanswered.
           </DialogDescription>
@@ -93,7 +95,17 @@ export const DownloadChecklistDialog = ({
             </div>
           ))}
         </div>
-        <DialogFooter className="gap-2 sm:justify-end">
+        {readyFile && (
+          <a
+            data-testid="save-ready-file"
+            href={readyFile.url}
+            download={readyFile.filename}
+            className="inline-flex h-11 w-full shrink-0 items-center justify-center rounded-md bg-primary px-4 text-center text-sm font-medium text-primary-foreground"
+          >
+            Tap to save {readyFile.filename}
+          </a>
+        )}
+        <DialogFooter className="shrink-0 gap-2 sm:justify-end">
           <Button
             type="button"
             variant="secondary"

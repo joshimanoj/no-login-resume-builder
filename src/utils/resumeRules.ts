@@ -68,6 +68,7 @@ export interface ResumeData {
     date: string;
     expiryDate?: string;
     credentialId?: string;
+    description?: string;
   }>;
   publications?: Array<{
     id: string;
@@ -128,6 +129,8 @@ export function formatEducationScore(edu: { gpa?: string; scoreType?: ScoreType 
     const withPct = value.endsWith("%") ? value : `${value}%`;
     return `Percentage: ${withPct}`;
   }
+  // A number with no type is not a GPA. Hide it until Percentage or GPA is chosen.
+  if (edu.scoreType !== "gpa") return "";
   const stripped = value.replace(/\/\s*10$/i, "").trim();
   return `GPA: ${stripped}/10`;
 }
@@ -152,9 +155,10 @@ export function formatDateRange(
   start?: string,
   end?: string,
   current?: boolean,
-  separator = " - "
+  separator = " - ",
+  ongoingLabel = "Present"
 ): string {
-  return joinFilled([formatResumeDate(start), current ? "Present" : formatResumeDate(end)], separator);
+  return joinFilled([formatResumeDate(start), current ? ongoingLabel : formatResumeDate(end)], separator);
 }
 
 export const CONTACT_WEBSITE_LABEL = "Website";

@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import JSZip from "jszip";
 
 const require = createRequire(import.meta.url);
-const { buildDocx } = require("../../buildResumeDocx.cjs");
+const { buildDocx, htmlBlocks } = require("../../buildResumeDocx.cjs");
 
 const resume = {
   personalInfo: {
@@ -96,4 +96,223 @@ describe("Word contact links", () => {
     expect(text).not.toContain("LinkedIn");
     expect(rels).not.toContain("jordanhale.dev");
   });
+});
+
+describe("Word certification description", () => {
+  const data = {
+    ...resume,
+    certifications: [{
+      id: "cert-1",
+      name: "AWS Solutions Architect",
+      issuer: "Amazon Web Services",
+      date: "2023-04-01",
+      credentialId: "AWS-SAA-8821",
+      description: "<p>Covers VPC design and IAM.</p><ul><li>Cost controls</li></ul>",
+    }],
+  };
+
+  it.each(["resumake-classic", "resumake-classic-single", "modern", "sidebar"])(
+    "%s keeps the credential id and the description text",
+    async (template) => {
+      const { text } = await wordParts(template, data);
+      expect(text).toContain("Credential ID: AWS-SAA-8821");
+      expect(text).toContain("Covers VPC design and IAM.");
+      expect(text).toContain("Cost controls");
+    }
+  );
+
+  it("omits an empty description and an empty expiry", async () => {
+    const empty = {
+      ...resume,
+      certifications: [{
+        id: "cert-1",
+        name: "AWS Solutions Architect",
+        issuer: "Amazon Web Services",
+        date: "2023-04-01",
+        credentialId: "AWS-SAA-8821",
+        description: "<p><br></p>",
+      }],
+    };
+    const { text } = await wordParts("resumake-classic", empty);
+    expect(text).toContain("Credential ID: AWS-SAA-8821");
+    expect(text).not.toContain("Covers VPC");
+    expect(text).not.toContain("Expires");
+  });
+});
+
+describe("Word certification expiry and publication links", () => {
+  const data = {
+    ...resume,
+    certifications: [{
+      id: "cert-1",
+      name: "AWS Solutions Architect",
+      issuer: "Amazon Web Services",
+      date: "2023-04-01",
+      expiryDate: "2026-04",
+      credentialId: "AWS-SAA-8821",
+      description: "<p>Covers VPC design.</p>",
+    }],
+    publications: [{
+      id: "pub-1",
+      title: "Layout systems",
+      journal: "Engineering Practice Review",
+      date: "2024-02-01",
+      authors: "Jordan Hale",
+      link: "https://jordanhale.dev/layout-systems",
+    }],
+  };
+
+  it.each(["resumake-classic", "resumake-classic-single", "modern", "sidebar"])(
+    "%s prints Expires with the formatted date and a real publication hyperlink",
+    async (template) => {
+      const { text, rels, documentXml } = await wordParts(template, data);
+      expect(text).toContain("Expires");
+      expect(text).toContain("Apr 2026");
+      expect(text).toContain("Authors: Jordan Hale");
+      expect(rels).toContain("https://jordanhale.dev/layout-systems");
+      expect(documentXml).toContain('w:val="single"');
+      expect(text).toContain("https://jordanhale.dev/layout-systems");
+    }
+  );
+
+  it.each(["resumake-classic", "resumake-classic-single", "modern", "sidebar"])(
+    "%s omits Expires when expiryDate is empty and hides an empty publication link",
+    async (template) => {
+      const empty = {
+        ...resume,
+        certifications: [{
+          id: "cert-1",
+          name: "AWS Solutions Architect",
+          issuer: "Amazon Web Services",
+          date: "2023-04-01",
+          expiryDate: "",
+          credentialId: "AWS-SAA-8821",
+        }],
+        publications: [{
+          id: "pub-1",
+          title: "Layout systems",
+          journal: "Engineering Practice Review",
+          date: "2024-02-01",
+          authors: "Jordan Hale",
+          link: "",
+        }],
+      };
+      const { text, rels } = await wordParts(template, empty);
+      expect(text).toContain("Authors: Jordan Hale");
+      expect(text).not.toContain("Expires");
+      expect(rels).not.toContain("layout-systems");
+    }
+  );
+
+  it("does not label a score as GPA when the type is missing", async () => {
+    const unscored = {
+      ...resume,
+      education: [{
+        id: "edu-1",
+        school: "Sri Chaitanya Junior College",
+        degree: "Intermediate",
+        gpa: "8.6",
+        startDate: "2020-06-01",
+        endDate: "2022-03-01",
+      }],
+    };
+    const { text } = await wordParts("modern", unscored);
+    expect(text).not.toContain("GPA");
+    expect(text).not.toContain("8.6");
+  });
+});
+
+describe("Word list items", () => {
+  const listed = {
+    ...resume,
+    experience: [{
+      id: "exp-1",
+      company: "Northstar Labs",
+      position: "Engineer",
+      startDate: "2022-01-01",
+      endDate: "2023-01-01",
+      description: "<ul><li>Prepared libraries for 120+ samples</li><li>Analysed qPCR data</li></ul>",
+    }],
+    projects: [{
+      id: "proj-1",
+      name: "Assay panel",
+      description: "<ul><li>Designed the assay</li><li>Shared the protocol</li></ul>",
+    }],
+    certifications: [{
+      id: "cert-1",
+      name: "AWS Solutions Architect",
+      issuer: "Amazon Web Services",
+      date: "2023-04-01",
+      description: "<ul><li>Covers VPC design</li><li>Cost controls</li></ul>",
+    }],
+  };
+
+  it("splits a list into blocks and leaves a plain paragraph as one block", () => {
+    expect(htmlBlocks("<ul><li>Prepared libraries for 120+ samples</li><li>Analysed qPCR data</li></ul>")).toEqual([
+      { kind: "ul", text: "Prepared libraries for 120+ samples", number: 1 },
+      { kind: "ul", text: "Analysed qPCR data", number: 2 },
+    ]);
+    expect(htmlBlocks("<ol><li>First result</li><li>Second result</li></ol>")).toEqual([
+      { kind: "ol", text: "First result", number: 1 },
+      { kind: "ol", text: "Second result", number: 2 },
+    ]);
+    expect(htmlBlocks('<ol><li data-list="bullet">First result</li><li data-list="bullet">Second result</li></ol>').map((block) => block.kind)).toEqual(["ul", "ul"]);
+    expect(htmlBlocks("<p>One paragraph.</p><p>Still one line.</p>")).toEqual([
+      { kind: "p", text: "One paragraph. Still one line." },
+    ]);
+    expect(htmlBlocks("<p><br></p>")).toEqual([]);
+    expect(htmlBlocks("")).toEqual([]);
+  });
+
+  it.each(["resumake-classic", "sidebar"])(
+    "%s puts each experience, project, and certification item on its own line",
+    async (template) => {
+      const { text } = await wordParts(template, listed);
+      expect(text).toContain("Prepared libraries for 120+ samples");
+      expect(text).toContain("Analysed qPCR data");
+      expect(text).not.toContain("Prepared libraries for 120+ samples Analysed qPCR data");
+      expect(text).toContain("Designed the assay");
+      expect(text).toContain("Shared the protocol");
+      expect(text).not.toContain("Designed the assay Shared the protocol");
+      expect(text).toContain("Covers VPC design");
+      expect(text).toContain("Cost controls");
+      expect(text).not.toContain("Covers VPC design Cost controls");
+    }
+  );
+});
+
+describe("ongoing education says Pursuing", () => {
+  const data = {
+    ...resume,
+    experience: [{
+      id: "exp-1",
+      company: "Northstar Labs",
+      position: "Intern",
+      startDate: "2024-06-01",
+      endDate: "",
+      current: true,
+      description: "",
+    }],
+    education: [{
+      id: "edu-1",
+      school: "University of Texas",
+      degree: "B.S. Computer Science",
+      startDate: "2022-08-01",
+      endDate: "",
+      current: true,
+    }],
+  };
+
+  it.each(["resumake-classic", "resumake-classic-single", "modern", "sidebar"])(
+    "%s keeps the start date, says Pursuing for study, and Present for a job",
+    async (template) => {
+      const { text } = await wordParts(template, data);
+      expect(text).toContain("Aug 2022");
+      expect(text).toContain("Pursuing");
+      expect(text).toContain("Jun 2024");
+      expect(text).toContain("Present");
+      expect(text).not.toContain("Aug 2022 - Present");
+      expect(text).not.toContain("Aug 2022 | Present");
+    }
+  );
 });

@@ -1,9 +1,9 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { MapPin, Mail, Phone, Globe, Linkedin, Calendar, User, GraduationCap, Briefcase, LayoutGrid, FolderKanban, Trophy, Award, BadgeCheck, BookOpen, type LucideIcon } from "lucide-react";
 import { ResumeData } from "./ResumeBuilder";
-import { CONTACT_LINKEDIN_LABEL, CONTACT_WEBSITE_LABEL, educationEntryLines, formatContactLine, formatDateRange, formatPlace, formatResumeDate } from "@/utils/resumeRules";
+import { CONTACT_LINKEDIN_LABEL, CONTACT_WEBSITE_LABEL, educationEntryLines, formatContactLine, formatDateRange, formatPlace, formatResumeDate, isRichTextEmpty } from "@/utils/resumeRules";
 
 interface ResumePreviewProps {
   resumeData: ResumeData;
@@ -19,6 +19,25 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
     if (!trimmed) return undefined;
     if (/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) return trimmed;
     return `https://${trimmed}`;
+  };
+
+  const publicationLink = (link: string | undefined, className: string, tag: "p" | "div" = "p", style?: CSSProperties) => {
+    const text = link?.trim();
+    if (!text) return null;
+    const href = externalHref(text);
+    if (!href) return null;
+    const Tag = tag;
+    return (
+      <Tag className={className} style={style}>
+        <a href={href} style={{ color: "inherit" }}>{text}</a>
+      </Tag>
+    );
+  };
+
+  const renderExpiry = (expiryDate?: string) => {
+    const formatted = formatDate(expiryDate);
+    if (!formatted) return null;
+    return <div>Expires: {formatted}</div>;
   };
 
   const mailtoHref = (value: string) => {
@@ -155,7 +174,7 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
     }
   ) => {
     const lines = educationEntryLines(edu);
-    const dateText = formatDateRange(edu.startDate, edu.endDate, edu.current, options.dateSeparator);
+    const dateText = formatDateRange(edu.startDate, edu.endDate, edu.current, options.dateSeparator, "Pursuing");
     return (
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -388,9 +407,15 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                   </div>
                   <div className="text-right text-sm text-gray-600">
                     <div>{formatDate(cert.date)}</div>
-                    {cert.expiryDate && <div>Expires: {formatDate(cert.expiryDate)}</div>}
+                    {renderExpiry(cert.expiryDate)}
                   </div>
                 </div>
+                {!isRichTextEmpty(cert.description) && (
+                  <div
+                    className="text-gray-700 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: cert.description! }}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -411,9 +436,7 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                     <h3 className="font-semibold text-gray-900">{pub.title}</h3>
                     <p className="text-gray-700 font-medium">{pub.journal}</p>
                     {pub.authors && <p className="text-gray-600 text-sm">Authors: {pub.authors}</p>}
-                    {pub.link && (
-                      <p className="text-blue-600 text-sm">{pub.link}</p>
-                    )}
+                    {publicationLink(pub.link, "text-blue-600 text-sm")}
                   </div>
                   <span className="text-sm text-gray-600">{formatDate(pub.date)}</span>
                 </div>
@@ -628,9 +651,15 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                   </div>
                   <div className="text-right text-sm text-gray-600">
                     <div>{formatDate(cert.date)}</div>
-                    {cert.expiryDate && <div>Expires: {formatDate(cert.expiryDate)}</div>}
+                    {renderExpiry(cert.expiryDate)}
                   </div>
                 </div>
+                {!isRichTextEmpty(cert.description) && (
+                  <div
+                    className="text-gray-700 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: cert.description! }}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -653,9 +682,7 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                     {pub.authors && (
                       <div className="text-gray-600 text-sm">Authors: {pub.authors}</div>
                     )}
-                    {pub.link && (
-                      <div className="text-blue-600 text-sm">{pub.link}</div>
-                    )}
+                    {publicationLink(pub.link, "text-blue-600 text-sm", "div")}
                   </div>
                   <span className="text-gray-600 text-sm">{formatDate(pub.date)}</span>
                 </div>
@@ -865,9 +892,15 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                   </div>
                   <div className="text-right text-sm text-gray-600">
                     <div>{formatDate(cert.date)}</div>
-                    {cert.expiryDate && <div>Expires: {formatDate(cert.expiryDate)}</div>}
+                    {renderExpiry(cert.expiryDate)}
                   </div>
                 </div>
+                {!isRichTextEmpty(cert.description) && (
+                  <div
+                    className="text-gray-700 leading-relaxed mt-0.5"
+                    dangerouslySetInnerHTML={{ __html: cert.description! }}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -890,9 +923,7 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                     {pub.authors && (
                       <div className="text-gray-600 text-sm">Authors: {pub.authors}</div>
                     )}
-                    {pub.link && (
-                      <div className="text-blue-600 text-sm">{pub.link}</div>
-                    )}
+                    {publicationLink(pub.link, "text-blue-600 text-sm", "div")}
                   </div>
                   <span className="text-gray-600 text-sm">{formatDate(pub.date)}</span>
                 </div>
@@ -1109,9 +1140,15 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                   </div>
                   <div className="text-right text-sm text-gray-600">
                     <div>{formatDate(cert.date)}</div>
-                    {cert.expiryDate && <div>Expires: {formatDate(cert.expiryDate)}</div>}
+                    {renderExpiry(cert.expiryDate)}
                   </div>
                 </div>
+                {!isRichTextEmpty(cert.description) && (
+                  <div
+                    className="text-gray-700 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: cert.description! }}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -1132,9 +1169,7 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                     <h3 className="font-semibold text-gray-900">{pub.title}</h3>
                     <p className="text-gray-700 font-medium">{pub.journal}</p>
                     {pub.authors && <p className="text-gray-600 text-sm">Authors: {pub.authors}</p>}
-                    {pub.link && (
-                      <p className="text-blue-600 text-sm">{pub.link}</p>
-                    )}
+                    {publicationLink(pub.link, "text-blue-600 text-sm")}
                   </div>
                   <span className="text-sm text-gray-600">{formatDate(pub.date)}</span>
                 </div>
@@ -1341,9 +1376,15 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                   </div>
                   <div className="text-right text-sm creative-date">
                     <div>{formatDate(cert.date)}</div>
-                    {cert.expiryDate && <div>Expires: {formatDate(cert.expiryDate)}</div>}
+                    {renderExpiry(cert.expiryDate)}
                   </div>
                 </div>
+                {!isRichTextEmpty(cert.description) && (
+                  <div
+                    className="text-gray-700 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: cert.description! }}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -1364,7 +1405,7 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                     <h3 className="font-semibold text-gray-900">{pub.title}</h3>
                     <p className="text-gray-700 font-medium">{pub.journal}</p>
                     {pub.authors && <p className="text-gray-600 text-sm">Authors: {pub.authors}</p>}
-                    {pub.link && <p className="text-sm" style={{ color: "#7c3aed" }}>{pub.link}</p>}
+                    {publicationLink(pub.link, "text-sm", "p", { color: "#7c3aed" })}
                   </div>
                   <span className="creative-date text-sm">{formatDate(pub.date)}</span>
                 </div>
@@ -1580,9 +1621,15 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                   </div>
                   <div className="text-right text-gray-600">
                     <div>{formatDate(cert.date)}</div>
-                    {cert.expiryDate && <div>Expires: {formatDate(cert.expiryDate)}</div>}
+                    {renderExpiry(cert.expiryDate)}
                   </div>
                 </div>
+                {!isRichTextEmpty(cert.description) && (
+                  <div
+                    className="text-gray-700 leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: cert.description! }}
+                  />
+                )}
               </div>
             ))}
           </div>
@@ -1603,9 +1650,7 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                     <h3 className="font-bold text-gray-900">{pub.title}</h3>
                     <p className="text-gray-700 font-semibold">{pub.journal}</p>
                     {pub.authors && <p className="text-gray-600">Authors: {pub.authors}</p>}
-                    {pub.link && (
-                      <p className="text-blue-600">{pub.link}</p>
-                    )}
+                    {publicationLink(pub.link, "text-blue-600")}
                   </div>
                   <span className="text-gray-600">{formatDate(pub.date)}</span>
                 </div>
@@ -1822,13 +1867,21 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                     <h3 className="resumake-classic-institution">{cert.name}</h3>
                     {cert.issuer && <p className="resumake-classic-position">{cert.issuer}</p>}
                   </div>
-                  {cert.date && (
-                    <div className="resumake-classic-date">{formatDate(cert.date)}</div>
+                  {(cert.date || cert.expiryDate) && (
+                    <div className="resumake-classic-date">
+                      {cert.date && <div>{formatDate(cert.date)}</div>}
+                      {renderExpiry(cert.expiryDate)}
+                    </div>
                   )}
                 </div>
                 {cert.credentialId && (
                   <div className="resumake-classic-item-content">
                     <p className="resumake-classic-location">Credential ID: {cert.credentialId}</p>
+                  </div>
+                )}
+                {!isRichTextEmpty(cert.description) && (
+                  <div className="resumake-classic-item-content">
+                    <div dangerouslySetInnerHTML={{ __html: cert.description! }} />
                   </div>
                 )}
               </div>
@@ -1857,9 +1910,9 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                     <div className="resumake-classic-date">{formatDate(pub.date)}</div>
                   )}
                 </div>
-                {pub.link && (
+                {pub.link?.trim() && (
                   <div className="resumake-classic-item-content">
-                    <p className="text-blue-600">{pub.link}</p>
+                    {publicationLink(pub.link, "text-blue-600")}
                   </div>
                 )}
               </div>
@@ -2091,11 +2144,20 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                   </div>
                   <div className="text-right text-sm text-black">
                     {cert.date && <div>{formatDate(cert.date)}</div>}
+                    {renderExpiry(cert.expiryDate)}
                   </div>
                 </div>
                 {cert.credentialId && (
                   <div className="mt-1 text-sm text-black">
                     <span className="font-medium">Credential ID:</span> {cert.credentialId}
+                  </div>
+                )}
+                {!isRichTextEmpty(cert.description) && (
+                  <div className="-mt-1">
+                    <div
+                      className="text-black leading-relaxed ml-2"
+                      dangerouslySetInnerHTML={{ __html: cert.description! }}
+                    />
                   </div>
                 )}
               </div>
@@ -2118,11 +2180,7 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                     <h3 className="font-bold text-black">{pub.title}</h3>
                     {pub.journal && <p className="italic text-black">{pub.journal}</p>}
                     {pub.authors && <p className="text-sm text-black">Authors: {pub.authors}</p>}
-                    {pub.link && (
-                      <div className="text-sm text-blue-600 -mt-1">
-                        {pub.link}
-                      </div>
-                    )}
+                    {publicationLink(pub.link, "text-sm text-blue-600 -mt-1", "div")}
                   </div>
                   <div className="text-right text-sm text-black">
                     {pub.date && <div>{formatDate(pub.date)}</div>}
@@ -2201,7 +2259,7 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
               <div className="sidebar-edu-list">
                 {resumeData.education.map((edu) => {
                   const lines = educationEntryLines(edu);
-                  const dateText = formatDateRange(edu.startDate, edu.endDate, edu.current, " - ");
+                  const dateText = formatDateRange(edu.startDate, edu.endDate, edu.current, " - ", "Pursuing");
                   return (
                     <div key={edu.id} className="sidebar-edu">
                       {lines.place && <div className="sidebar-edu-place">{lines.place}</div>}
@@ -2346,9 +2404,17 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                         <h3 className="sidebar-role">{cert.name}</h3>
                         {cert.issuer && <p className="sidebar-company">{cert.issuer}</p>}
                       </div>
-                      {cert.date && <div className="sidebar-date">{formatDate(cert.date)}</div>}
+                      {(cert.date || cert.expiryDate) && (
+                        <div className="sidebar-date">
+                          {cert.date && <div>{formatDate(cert.date)}</div>}
+                          {renderExpiry(cert.expiryDate)}
+                        </div>
+                      )}
                     </div>
                     {cert.credentialId && <p className="sidebar-meta">Credential ID: {cert.credentialId}</p>}
+                    {!isRichTextEmpty(cert.description) && (
+                      <div className="sidebar-prose" dangerouslySetInnerHTML={{ __html: cert.description! }} />
+                    )}
                   </div>
                 ))}
               </div>
@@ -2369,7 +2435,7 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
                       </div>
                       {pub.date && <div className="sidebar-date">{formatDate(pub.date)}</div>}
                     </div>
-                    {pub.link && <p className="sidebar-link">{pub.link}</p>}
+                    {publicationLink(pub.link, "sidebar-link")}
                   </div>
                 ))}
               </div>
@@ -2380,6 +2446,7 @@ export const ResumePreview = ({ resumeData, template }: ResumePreviewProps) => {
 
     return (
       <div className="sidebar-resume">
+        <div className="sidebar-print-bar" aria-hidden="true" />
         {main}
         {rail}
       </div>

@@ -168,22 +168,6 @@ All colors MUST be HSL.
   box-shadow: none !important;
 }
 
-/* Phone screen only. Lay the preview out at paper width, then zoom it to the
-   preview column. Print and PDF stay unscaled: this is @media screen, and the
-   downloaded HTML is rendered on a desktop viewport. */
-@media screen and (max-width: 639px) {
-  #resume-preview {
-    container-type: inline-size;
-  }
-
-  #resume-preview > div {
-    width: 794px;
-    max-width: none;
-    overflow: visible;
-    zoom: calc(100cqw / 794px);
-  }
-}
-
 /* Hide page break lines during PDF generation */
 @media print {
   .preview-only {
@@ -1243,6 +1227,66 @@ button[data-variant="outline"]:hover {
   padding: 1.85rem 1.6rem 1.5rem 1.55rem;
 }
 
+/* Empty on screen. In the PDF it is only the navy color, pulled through the
+   page margin so page 2 is a plain strip and the text stays on page 1. */
+.sidebar-print-bar {
+  display: none;
+}
+
+@media print {
+  .sidebar-print-bar {
+    display: block;
+    position: fixed;
+    top: -12mm;
+    bottom: -12mm;
+    left: -10px;
+    width: calc(32% + 10px);
+    background: #1b3a4b;
+    z-index: 0;
+    pointer-events: none;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .sidebar-rail,
+  .sidebar-main {
+    position: relative;
+    z-index: 1;
+  }
+
+  .sidebar-rail {
+    background: transparent;
+  }
+
+  .resume-preview > .sidebar-resume,
+  .sidebar-resume section {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  /* A heading stays with its first entry. Later entries in that section may still split. */
+  .sidebar-heading,
+  .sidebar-rail-heading {
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .sidebar-block > h2 + * {
+    break-before: avoid;
+    page-break-before: avoid;
+  }
+
+  .sidebar-job,
+  .sidebar-entry,
+  .sidebar-edu,
+  .sidebar-block > .sidebar-prose,
+  .sidebar-contact,
+  .sidebar-skills {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}
+
 .sidebar-photo {
   width: 7.25rem;
   height: 7.25rem;
@@ -1484,7 +1528,21 @@ button[data-variant="outline"]:hover {
 
 .sidebar-prose ul,
 .sidebar-prose ol {
-  padding-left: 1rem;
+  padding-left: 1.15rem;
+}
+
+.sidebar-prose ul,
+.sidebar-prose ul li {
+  list-style-type: disc !important;
+}
+
+.sidebar-prose ol,
+.sidebar-prose ol li {
+  list-style-type: decimal !important;
+}
+
+.sidebar-prose li {
+  display: list-item !important;
 }
 
 .sidebar-prose li + li {

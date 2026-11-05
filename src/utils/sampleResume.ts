@@ -122,6 +122,7 @@ export const SAMPLE_RESUME: ResumeData = {
       date: "2023-04",
       expiryDate: "2026-04",
       credentialId: "AWS-SAA-8821",
+      description: "<p>Covers VPC design, IAM, and cost controls for production workloads.</p>",
     },
   ],
   publications: [

@@ -1,6 +1,7 @@
 // import jsPDF from 'jspdf'; // Commented out - backup
 // import html2canvas from 'html2canvas'; // Commented out - backup
 import type { ResumeData } from "@/components/ResumeBuilder";
+import { revokeLater, triggerFileDownload, type ReadyDownload } from "@/utils/saveFile";
 
 // Function to slice canvas into page-sized pieces
 // function sliceCanvas(canvas: HTMLCanvasElement, startYPx: number, endYPx: number): HTMLCanvasElement {
@@ -65,7 +66,17 @@ export function getResumeHtml(elementId: string): string {
 `;
 }
 
-export const generatePDF = async (elementId: string, filename: string = 'resume.pdf') => {
+/** Keep the blob url alive and also click it once for desktop. Phones get the same url as a tap target. */
+export function publishDownload(blob: Blob, filename: string, contentType: string | null): ReadyDownload {
+  if (blob.size === 0) throw new Error("Empty file");
+  if (contentType?.includes("application/json")) throw new Error("Server returned an error instead of a file");
+  const url = URL.createObjectURL(blob);
+  triggerFileDownload(url, filename);
+  revokeLater(url);
+  return { url, filename };
+}
+
+export const generatePDF = async (elementId: string, filename: string = 'resume.pdf'): Promise<ReadyDownload> => {
   try {
     const previewOnlyElements = document.querySelectorAll('.preview-only');
     const originalDisplays: string[] = [];
@@ -84,15 +95,7 @@ export const generatePDF = async (elementId: string, filename: string = 'resume.
     });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    return true;
+    return publishDownload(blob, filename, response.headers.get("content-type"));
   } catch (error) {
     console.error('Error generating PDF:', error);
     throw error;
@@ -103,7 +106,7 @@ export const generateWord = async (
   resumeData: ResumeData,
   template: string,
   filename: string = "resume.docx"
-) => {
+): Promise<ReadyDownload> => {
   try {
     const response = await fetch("/api/generate-docx", {
       method: "POST",
@@ -112,15 +115,7 @@ export const generateWord = async (
     });
     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    return true;
+    return publishDownload(blob, filename, response.headers.get("content-type"));
   } catch (error) {
     console.error("Error generating Word document:", error);
     throw error;

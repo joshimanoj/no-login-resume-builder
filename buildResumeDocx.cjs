@@ -30,8 +30,105 @@ function stripHtml(html) {
   return html
     .replace(/<[^>]+>/g, " ")
     .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+// One description style for every builder. A list item is its own block.
+// Plain HTML with no list stays one block, matching the old stripHtml line.
+function htmlBlocks(html) {
+  if (!html || typeof html !== "string") return [];
+  if (!/<(ul|ol|li)\b/i.test(html)) {
+    const text = stripHtml(html);
+    return text ? [{ kind: "p", text }] : [];
+  }
+  const blocks = [];
+  const listStack = [];
+  const tokenRe = /<(\/?)(ul|ol|li)\b[^>]*>/gi;
+  let last = 0;
+  let match;
+  let liOpen = false;
+  let liStart = 0;
+  let liKind = "ul";
+  let liNumber = 1;
+
+  function pushPlain(fragment) {
+    const text = stripHtml(fragment);
+    if (text) blocks.push({ kind: "p", text });
+  }
+
+  while ((match = tokenRe.exec(html))) {
+    const closing = match[1] === "/";
+    const tag = match[2].toLowerCase();
+    if (!closing && (tag === "ul" || tag === "ol")) {
+      if (!liOpen) pushPlain(html.slice(last, match.index));
+      listStack.push({ kind: tag, number: 1 });
+      last = match.index + match[0].length;
+    } else if (closing && (tag === "ul" || tag === "ol")) {
+      if (liOpen) {
+        const text = stripHtml(html.slice(liStart, match.index));
+        if (text) blocks.push({ kind: liKind, text, number: liNumber });
+        liOpen = false;
+      } else {
+        pushPlain(html.slice(last, match.index));
+      }
+      listStack.pop();
+      last = match.index + match[0].length;
+    } else if (!closing && tag === "li") {
+      if (liOpen) {
+        const text = stripHtml(html.slice(liStart, match.index));
+        if (text) blocks.push({ kind: liKind, text, number: liNumber });
+      } else {
+        pushPlain(html.slice(last, match.index));
+      }
+      const list = listStack[listStack.length - 1] || { kind: "ul", number: 1 };
+      const dataList = /data-list\s*=\s*["']([^"']+)["']/i.exec(match[0]);
+      const listed = dataList ? dataList[1].toLowerCase() : "";
+      liKind = listed === "ordered" ? "ol" : listed === "bullet" || listed === "checked" || listed === "unchecked" ? "ul" : list.kind;
+      liNumber = list.number;
+      list.number += 1;
+      liOpen = true;
+      liStart = match.index + match[0].length;
+      last = liStart;
+    } else if (closing && tag === "li") {
+      if (liOpen) {
+        const text = stripHtml(html.slice(liStart, match.index));
+        if (text) blocks.push({ kind: liKind, text, number: liNumber });
+        liOpen = false;
+      }
+      last = match.index + match[0].length;
+    }
+  }
+  if (liOpen) {
+    const text = stripHtml(html.slice(liStart));
+    if (text) blocks.push({ kind: liKind, text, number: liNumber });
+  } else {
+    pushPlain(html.slice(last));
+  }
+  return blocks;
+}
+
+function blockPrefix(block) {
+  if (block.kind === "ul") return "• ";
+  if (block.kind === "ol") return `${block.number}. `;
+  return "";
+}
+
+function descriptionParagraphs(html, makeRun, after) {
+  const blocks = htmlBlocks(html);
+  return blocks.map((block, index) => {
+    const last = index === blocks.length - 1;
+    return new Paragraph({
+      children: [makeRun(blockPrefix(block) + block.text)],
+      alignment: block.kind === "p" ? AlignmentType.JUSTIFIED : AlignmentType.LEFT,
+      spacing: { after: last ? after : 40 },
+    });
+  });
 }
 
 function joinFilled(parts, separator) {
@@ -95,8 +192,49 @@ function formatEducationScore(edu) {
     const withPct = value.endsWith("%") ? value : value + "%";
     return "Percentage: " + withPct;
   }
+  // A number with no type is not a GPA. Hide it until Percentage or GPA is chosen.
+  if (!edu || edu.scoreType !== "gpa") return "";
   const stripped = value.replace(/\/\s*10$/i, "").trim();
   return "GPA: " + stripped + "/10";
+}
+
+function expiryText(date) {
+  const formatted = formatDate(date);
+  return formatted ? "Expires: " + formatted : "";
+}
+
+function plainLine(text, opts) {
+  if (!text) return null;
+  const style = opts || {};
+  return new Paragraph({
+    children: [
+      new TextRun({
+        text,
+        size: style.size || SZ.body,
+        color: style.color || C.light,
+        font: style.font,
+        italics: !!style.italics,
+      }),
+    ],
+    spacing: { after: style.after == null ? 40 : style.after },
+  });
+}
+
+function publicationLinkParagraph(link, opts) {
+  const label = link && String(link).trim();
+  const href = externalHref(label);
+  if (!label || !href) return null;
+  const style = opts || {};
+  return new Paragraph({
+    children: [
+      webLink(label, href, {
+        size: style.size || SZ.body,
+        linkColor: style.linkColor || LINK_BLUE,
+        font: style.font,
+      }),
+    ],
+    spacing: { after: style.after == null ? SP.blockAfter : style.after },
+  });
 }
 
 const EDUCATION_RIGHT_TAB = 9360;
@@ -274,13 +412,7 @@ function buildResumakeClassic(data) {
 
   if (p.summary) {
     children.push(...sectionHeadingWithLine("Professional Summary"));
-    children.push(
-      new Paragraph({
-        children: [new TextRun({ text: stripHtml(p.summary), size: SZ.body, color: C.med })],
-        alignment: AlignmentType.JUSTIFIED,
-        spacing: { after: SP.blockAfter },
-      })
-    );
+    children.push(...descriptionParagraphs(p.summary, (text) => new TextRun({ text, size: SZ.body, color: C.med }), SP.blockAfter));
   }
 
   if (data.experience && data.experience.length > 0) {
@@ -300,22 +432,14 @@ function buildResumakeClassic(data) {
           spacing: { after: SP.itemAfter },
         })
       );
-      if (exp.description) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: stripHtml(exp.description), size: SZ.body, color: C.med })],
-            alignment: AlignmentType.JUSTIFIED,
-            spacing: { after: SP.blockAfter },
-          })
-        );
-      }
+      children.push(...descriptionParagraphs(exp.description, (text) => new TextRun({ text, size: SZ.body, color: C.med }), SP.blockAfter));
     });
   }
 
   if (data.education && data.education.length > 0) {
     children.push(...sectionHeadingWithLine("Education"));
     data.education.forEach((edu) => {
-      const dateStr = `${formatDate(edu.startDate)} - ${edu.current ? "Present" : formatDate(edu.endDate)}`;
+      const dateStr = formatDateRange(edu.startDate, edu.endDate, edu.current, " - ", "Pursuing");
       children.push(...educationParagraphs(edu, dateStr, false));
     });
   }
@@ -347,15 +471,7 @@ function buildResumakeClassic(data) {
           })
         );
       }
-      if (proj.description) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: stripHtml(proj.description), size: SZ.body, color: C.med })],
-            alignment: AlignmentType.JUSTIFIED,
-            spacing: { after: SP.blockAfter },
-          })
-        );
-      }
+      children.push(...descriptionParagraphs(proj.description, (text) => new TextRun({ text, size: SZ.body, color: C.med }), SP.blockAfter));
     });
   }
 
@@ -371,15 +487,7 @@ function buildResumakeClassic(data) {
           spacing: { after: SP.itemAfter },
         })
       );
-      if (a.description) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: stripHtml(a.description), size: SZ.body, color: C.med })],
-            alignment: AlignmentType.JUSTIFIED,
-            spacing: { after: SP.blockAfter },
-          })
-        );
-      }
+      children.push(...descriptionParagraphs(a.description, (text) => new TextRun({ text, size: SZ.body, color: C.med }), SP.blockAfter));
     });
   }
 
@@ -399,15 +507,7 @@ function buildResumakeClassic(data) {
           spacing: { after: SP.itemAfter },
         })
       );
-      if (a.description) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: stripHtml(a.description), size: SZ.body, color: C.med })],
-            alignment: AlignmentType.JUSTIFIED,
-            spacing: { after: SP.blockAfter },
-          })
-        );
-      }
+      children.push(...descriptionParagraphs(a.description, (text) => new TextRun({ text, size: SZ.body, color: C.med }), SP.blockAfter));
     });
   }
 
@@ -427,6 +527,8 @@ function buildResumakeClassic(data) {
           spacing: { after: SP.itemAfter },
         })
       );
+      const expiry = plainLine(expiryText(c.expiryDate), { color: C.light, after: 40 });
+      if (expiry) children.push(expiry);
       if (c.credentialId) {
         children.push(
           new Paragraph({
@@ -435,6 +537,7 @@ function buildResumakeClassic(data) {
           })
         );
       }
+      children.push(...descriptionParagraphs(c.description, (text) => new TextRun({ text, size: SZ.body, color: C.med }), SP.blockAfter));
     });
   }
 
@@ -462,6 +565,8 @@ function buildResumakeClassic(data) {
           })
         );
       }
+      const link = publicationLinkParagraph(pub.link, { linkColor: LINK_BLUE });
+      if (link) children.push(link);
     });
   }
 
@@ -489,13 +594,7 @@ function buildResumakeClassicSingle(data) {
 
   if (p.summary) {
     children.push(shadedSectionHeading("Professional Summary"));
-    children.push(
-      new Paragraph({
-        children: [new TextRun(tr({ text: stripHtml(p.summary), size: SZ.body }))],
-        alignment: AlignmentType.JUSTIFIED,
-        spacing: { after: SP.blockAfter },
-      })
-    );
+    children.push(...descriptionParagraphs(p.summary, (text) => new TextRun(tr({ text, size: SZ.body })), SP.blockAfter));
   }
 
   if (data.experience && data.experience.length > 0) {
@@ -515,15 +614,7 @@ function buildResumakeClassicSingle(data) {
           spacing: { after: SP.itemAfter },
         })
       );
-      if (exp.description) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun(tr({ text: stripHtml(exp.description), size: SZ.body }))],
-            alignment: AlignmentType.JUSTIFIED,
-            spacing: { after: SP.blockAfter },
-          })
-        );
-      }
+      children.push(...descriptionParagraphs(exp.description, (text) => new TextRun(tr({ text, size: SZ.body })), SP.blockAfter));
     });
   }
 
@@ -546,15 +637,7 @@ function buildResumakeClassicSingle(data) {
           spacing: { after: SP.itemAfter },
         })
       );
-      if (proj.description) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun(tr({ text: stripHtml(proj.description), size: SZ.body }))],
-            alignment: AlignmentType.JUSTIFIED,
-            spacing: { after: SP.blockAfter },
-          })
-        );
-      }
+      children.push(...descriptionParagraphs(proj.description, (text) => new TextRun(tr({ text, size: SZ.body })), SP.blockAfter));
       if (proj.technologies) {
         children.push(
           new Paragraph({
@@ -569,7 +652,7 @@ function buildResumakeClassicSingle(data) {
   if (data.education && data.education.length > 0) {
     children.push(shadedSectionHeading("Education"));
     data.education.forEach((edu) => {
-      const dateStr = `${formatDate(edu.startDate)} | ${edu.current ? "Present" : formatDate(edu.endDate)}`;
+      const dateStr = formatDateRange(edu.startDate, edu.endDate, edu.current, " | ", "Pursuing");
       children.push(...educationParagraphs(edu, dateStr, true));
     });
   }
@@ -586,15 +669,7 @@ function buildResumakeClassicSingle(data) {
           spacing: { after: SP.itemAfter },
         })
       );
-      if (a.description) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun(tr({ text: stripHtml(a.description), size: SZ.body }))],
-            alignment: AlignmentType.JUSTIFIED,
-            spacing: { after: SP.blockAfter },
-          })
-        );
-      }
+      children.push(...descriptionParagraphs(a.description, (text) => new TextRun(tr({ text, size: SZ.body })), SP.blockAfter));
     });
   }
 
@@ -610,15 +685,7 @@ function buildResumakeClassicSingle(data) {
           spacing: { after: 40 },
         })
       );
-      if (a.description) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun(tr({ text: stripHtml(a.description), size: SZ.body }))],
-            alignment: AlignmentType.JUSTIFIED,
-            spacing: { after: SP.blockAfter },
-          })
-        );
-      }
+      children.push(...descriptionParagraphs(a.description, (text) => new TextRun(tr({ text, size: SZ.body })), SP.blockAfter));
     });
   }
 
@@ -638,6 +705,8 @@ function buildResumakeClassicSingle(data) {
           spacing: { after: SP.itemAfter },
         })
       );
+      const expiry = plainLine(expiryText(c.expiryDate), { color: C.light, font: FONT.times, after: 40 });
+      if (expiry) children.push(expiry);
       if (c.credentialId) {
         children.push(
           new Paragraph({
@@ -646,6 +715,7 @@ function buildResumakeClassicSingle(data) {
           })
         );
       }
+      children.push(...descriptionParagraphs(c.description, (text) => new TextRun(tr({ text, size: SZ.body })), SP.blockAfter));
     });
   }
 
@@ -673,6 +743,8 @@ function buildResumakeClassicSingle(data) {
           })
         );
       }
+      const link = publicationLinkParagraph(pub.link, { font: FONT.times, linkColor: LINK_BLUE });
+      if (link) children.push(link);
     });
   }
 
@@ -685,8 +757,8 @@ function formatPlace(name, location) {
   return joinFilled([name, location], ", ");
 }
 
-function formatDateRange(start, end, current, separator) {
-  return joinFilled([formatDate(start), current ? "Present" : formatDate(end)], separator || " - ");
+function formatDateRange(start, end, current, separator, ongoing) {
+  return joinFilled([formatDate(start), current ? (ongoing || "Present") : formatDate(end)], separator || " - ");
 }
 
 function headingBar(text, color) {
@@ -737,13 +809,7 @@ function appendThemedSections(children, data, theme) {
 
   if (p.summary) {
     children.push(...heading(theme.labels.summary));
-    children.push(
-      new Paragraph({
-        children: [new TextRun({ text: stripHtml(p.summary), size: SZ.body, color: C.med })],
-        alignment: AlignmentType.JUSTIFIED,
-        spacing: { after: SP.blockAfter },
-      })
-    );
+    children.push(...descriptionParagraphs(p.summary, (text) => new TextRun({ text, size: SZ.body, color: C.med }), SP.blockAfter));
   }
 
   if (data.experience && data.experience.length > 0) {
@@ -772,22 +838,14 @@ function appendThemedSections(children, data, theme) {
           );
         }
       }
-      if (exp.description) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: stripHtml(exp.description), size: SZ.body, color: C.med })],
-            alignment: AlignmentType.JUSTIFIED,
-            spacing: { after: SP.blockAfter },
-          })
-        );
-      }
+      children.push(...descriptionParagraphs(exp.description, (text) => new TextRun({ text, size: SZ.body, color: C.med }), SP.blockAfter));
     });
   }
 
   if (data.education && data.education.length > 0) {
     children.push(...heading(theme.labels.education));
     data.education.forEach((edu) => {
-      const dateStr = formatDateRange(edu.startDate, edu.endDate, edu.current, dateSep);
+      const dateStr = formatDateRange(edu.startDate, edu.endDate, edu.current, dateSep, "Pursuing");
       children.push(...educationParagraphs(edu, dateStr, false));
     });
   }
@@ -823,15 +881,7 @@ function appendThemedSections(children, data, theme) {
           })
         );
       }
-      if (proj.description) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: stripHtml(proj.description), size: SZ.body, color: C.med })],
-            alignment: AlignmentType.JUSTIFIED,
-            spacing: { after: SP.blockAfter },
-          })
-        );
-      }
+      children.push(...descriptionParagraphs(proj.description, (text) => new TextRun({ text, size: SZ.body, color: C.med }), SP.blockAfter));
     });
   }
 
@@ -839,15 +889,7 @@ function appendThemedSections(children, data, theme) {
     children.push(...heading(theme.labels.achievements));
     data.achievements.forEach((a) => {
       children.push(itemRow(a.title, "", a.date ? formatDate(a.date) : ""));
-      if (a.description) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: stripHtml(a.description), size: SZ.body, color: C.med })],
-            alignment: AlignmentType.JUSTIFIED,
-            spacing: { after: SP.blockAfter },
-          })
-        );
-      }
+      children.push(...descriptionParagraphs(a.description, (text) => new TextRun({ text, size: SZ.body, color: C.med }), SP.blockAfter));
     });
   }
 
@@ -863,15 +905,7 @@ function appendThemedSections(children, data, theme) {
           })
         );
       }
-      if (a.description) {
-        children.push(
-          new Paragraph({
-            children: [new TextRun({ text: stripHtml(a.description), size: SZ.body, color: C.med })],
-            alignment: AlignmentType.JUSTIFIED,
-            spacing: { after: SP.blockAfter },
-          })
-        );
-      }
+      children.push(...descriptionParagraphs(a.description, (text) => new TextRun({ text, size: SZ.body, color: C.med }), SP.blockAfter));
     });
   }
 
@@ -887,6 +921,8 @@ function appendThemedSections(children, data, theme) {
           })
         );
       }
+      const expiry = plainLine(expiryText(c.expiryDate), { color: C.light, after: 40 });
+      if (expiry) children.push(expiry);
       if (c.credentialId) {
         children.push(
           new Paragraph({
@@ -895,6 +931,7 @@ function appendThemedSections(children, data, theme) {
           })
         );
       }
+      children.push(...descriptionParagraphs(c.description, (text) => new TextRun({ text, size: SZ.body, color: C.med }), SP.blockAfter));
     });
   }
 
@@ -918,6 +955,8 @@ function appendThemedSections(children, data, theme) {
           })
         );
       }
+      const link = publicationLinkParagraph(pub.link, { linkColor: theme.linkColor || LINK_BLUE });
+      if (link) children.push(link);
     });
   }
 }
@@ -1058,9 +1097,9 @@ const SIDEBAR_PAGE = SIDEBAR_RAIL + SIDEBAR_MAIN;
 const noLine = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
 const noCellBorders = { top: noLine, bottom: noLine, left: noLine, right: noLine };
 
-function sidebarDateRange(start, end, current) {
+function sidebarDateRange(start, end, current, ongoing) {
   const left = formatDate(start);
-  const right = current ? "Present" : formatDate(end);
+  const right = current ? (ongoing || "Present") : formatDate(end);
   return [left, right].filter(Boolean).join(" - ");
 }
 
@@ -1099,6 +1138,16 @@ function sidebarMainParagraph(runs, opts = {}) {
     border: opts.border,
     children: runs,
   });
+}
+
+function sidebarDescriptionParagraphs(html, after) {
+  const blocks = htmlBlocks(html);
+  return blocks.map((block, index) =>
+    sidebarMainParagraph(
+      [new TextRun({ text: blockPrefix(block) + block.text, size: 20, color: "374151", font: "Calibri" })],
+      { after: index === blocks.length - 1 ? after : 40 }
+    )
+  );
 }
 
 function sidebarHeading(label) {
@@ -1148,7 +1197,7 @@ function buildSidebar(data) {
       const place = [edu.school, edu.location].filter((part) => part && String(part).trim()).join(", ");
       const field = edu.field ? String(edu.field).trim() : "";
       const score = formatEducationScore(edu);
-      const dates = sidebarDateRange(edu.startDate, edu.endDate, edu.current);
+      const dates = sidebarDateRange(edu.startDate, edu.endDate, edu.current, "Pursuing");
       if (place) rail.push(sidebarRailParagraph(place, { bold: true, size: 20, after: 20 }));
       if (edu.degree && String(edu.degree).trim()) rail.push(sidebarRailParagraph(String(edu.degree).trim(), { after: 20 }));
       if (field) rail.push(sidebarRailParagraph(field, { after: 20 }));
@@ -1179,7 +1228,7 @@ function buildSidebar(data) {
 
   if (p.summary) {
     main.push(sidebarHeading("About Me"));
-    main.push(sidebarMainParagraph([new TextRun({ text: stripHtml(p.summary), size: 20, color: "374151", font: "Calibri" })], { after: 80 }));
+    main.push(...sidebarDescriptionParagraphs(p.summary, 80));
   }
 
   if (data.experience && data.experience.length) {
@@ -1199,9 +1248,7 @@ function buildSidebar(data) {
       if (place) {
         main.push(sidebarMainParagraph([new TextRun({ text: place, italics: true, size: 20, color: "4B5563", font: "Calibri" })], { after: 40 }));
       }
-      if (exp.description) {
-        main.push(sidebarMainParagraph([new TextRun({ text: stripHtml(exp.description), size: 20, color: "374151", font: "Calibri" })], { after: 80 }));
-      }
+      main.push(...sidebarDescriptionParagraphs(exp.description, 80));
     });
   }
 
@@ -1209,8 +1256,8 @@ function buildSidebar(data) {
     ["Projects", data.projects, (item) => ({ title: item.name, sub: item.technologies, date: item.date, body: item.description })],
     ["Achievements", data.achievements, (item) => ({ title: item.title, date: item.date, body: item.description })],
     ["Awards", data.awards, (item) => ({ title: item.title, sub: item.issuer, date: item.date, body: item.description })],
-    ["Certifications", data.certifications, (item) => ({ title: item.name, sub: item.issuer, date: item.date, body: item.credentialId ? "Credential ID: " + item.credentialId : "" })],
-    ["Publications", data.publications, (item) => ({ title: item.title, sub: item.journal, note: item.authors ? "Authors: " + item.authors : "", date: item.date, body: item.link })],
+    ["Certifications", data.certifications, (item) => ({ title: item.name, sub: item.issuer, date: item.date, note: item.credentialId ? "Credential ID: " + item.credentialId : "", extra: expiryText(item.expiryDate), body: item.description })],
+    ["Publications", data.publications, (item) => ({ title: item.title, sub: item.journal, note: item.authors ? "Authors: " + item.authors : "", date: item.date, link: item.link })],
   ];
   extraSections.forEach(([label, items, mapItem]) => {
     if (!items || !items.length) return;
@@ -1229,7 +1276,10 @@ function buildSidebar(data) {
       );
       if (row.sub) main.push(sidebarMainParagraph([new TextRun({ text: row.sub, italics: true, size: 20, color: "4B5563", font: "Calibri" })], { after: 20 }));
       if (row.note) main.push(sidebarMainParagraph([new TextRun({ text: row.note, size: 18, color: "4B5563", font: "Calibri" })], { after: 20 }));
-      if (row.body) main.push(sidebarMainParagraph([new TextRun({ text: stripHtml(row.body), size: 20, color: "374151", font: "Calibri" })], { after: 60 }));
+      if (row.extra) main.push(sidebarMainParagraph([new TextRun({ text: row.extra, size: 18, color: "4B5563", font: "Calibri" })], { after: 20 }));
+      const link = publicationLinkParagraph(row.link, { size: 18, linkColor: LINK_BLUE, font: "Calibri", after: 60 });
+      if (link) main.push(link);
+      main.push(...sidebarDescriptionParagraphs(row.body, 60));
     });
   });
 
@@ -1287,4 +1337,4 @@ async function buildDocx(resumeData, templateId) {
   return Packer.toBuffer(doc);
 }
 
-module.exports = { buildDocx };
+module.exports = { buildDocx, htmlBlocks };
