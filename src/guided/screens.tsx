@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronRight, FileDown, LayoutTemplate, MessageSquareText, PenLine, Sparkles, type LucideIcon } from "lucide-react";
 import { ResumePreview } from "@/components/ResumePreview";
-import { ResumeForm } from "@/components/ResumeForm";
 import { PhotoCropDialog } from "@/components/PhotoCropDialog";
 import { ScaledPreview } from "@/components/ScaledPreview";
 import { useToast } from "@/hooks/use-toast";
@@ -26,14 +25,14 @@ import {
   latestSubmission,
   sectionDef,
   type GuidedState,
-  type ListSection,
   type SectionId,
   type Submission,
 } from "./state";
-import { addItem, buildSteps, firstStepOfItem, firstStepOfSection, isListSection, items, optInKey, sectionIncluded, setAnswer } from "./steps";
-import { STATUS_TEXT, allSectionsPass, firstFailingSection, sectionIssues, sectionStatus } from "./checks";
+import { buildSteps, firstStepOfSection } from "./steps";
+import { allSectionsPass, firstFailingSection, sectionIssues } from "./checks";
 import { createSubmission, fetchReview, requestReview, signInWithGoogle, usingMock } from "./backend";
 import { SectionsList, SectionsMenu } from "./sections";
+import { SectionOverview } from "./overview";
 import { Actions, BigButton, CurieAvatar, Hint, LinkButton, Question, Screen, Spacer, Stars } from "./ui";
 
 // ---------- sign-in ----------
@@ -83,8 +82,11 @@ function ExampleCvPanel() {
   );
 }
 
-/** Something worth coming back to: she has been through the questions and entered something, or submitted. */
-const hasStarted = (s: GuidedState) => s.submissions.length > 0 || (Boolean(s.lastStep) && hasEnteredAnything(s.data));
+/**
+ * Something worth coming back to: she has entered something (on this phone, or saved to her account
+ * and opened on another phone), or submitted. The demo CV alone opens on the landing page.
+ */
+const hasStarted = (s: GuidedState) => s.submissions.length > 0 || ((Boolean(s.lastStep) || Boolean(s.user)) && hasEnteredAnything(s.data));
 
 export function Welcome() {
   const { state, update, goStep, signOut } = useGuided();
@@ -352,71 +354,13 @@ export function EditEverything() {
   return (
     <Screen title="Edit everything">
       <Hint>Every part of your CV. Tap a section to change, add, or delete anything.</Hint>
-      <div className="mt-4 space-y-2">
-        {SECTIONS.map((d) => {
-          const status = sectionStatus(state, d.id);
-          return (
-            <button
-              key={d.id}
-              type="button"
-              onClick={() => navigate(`/edit/${d.id}`)}
-              className="flex min-h-[52px] w-full items-center gap-3 rounded-xl border border-slate-200 px-3.5 text-left text-[15px]"
-            >
-              <span className="flex-1">{d.label}</span>
-              <span className={`text-xs ${status === "needs" ? "text-[#854F0B]" : status === "done" ? "text-[#3b6d11]" : "text-slate-500"}`}>
-                {STATUS_TEXT[status]}
-              </span>
-              <ChevronRight className="h-4 w-4 text-slate-400" />
-            </button>
-          );
-        })}
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-1">
+        <SectionsList />
       </div>
       <Actions>
         <BigButton onClick={() => navigate("/cv")}>Back to my CV</BigButton>
       </Actions>
     </Screen>
-  );
-}
-
-/** Full form for one section, reusing the classic builder's form. Used by Edit everything and Improve. */
-function SectionEditor({ section }: { section: SectionId }) {
-  const { state, update, goStep } = useGuided();
-  if (!sectionIncluded(state, section)) {
-    return (
-      <div className="mt-6">
-        <Hint>You skipped this section.</Hint>
-        <BigButton
-          className="mt-4"
-          onClick={() => {
-            let s = setAnswer(state, optInKey(section), true);
-            if (isListSection(section) && items(s, section).length === 0) s = addItem(s, section);
-            s = update(s);
-            goStep(isListSection(section) ? firstStepOfItem(s, section, 0) : firstStepOfSection(s, section));
-          }}
-        >
-          Add {sectionDef(section).label}
-        </BigButton>
-      </div>
-    );
-  }
-  return (
-    <div className="guided-section-editor -mx-1 mt-3">
-      <ResumeForm
-        resumeData={state.data}
-        setResumeData={(change) => update((s) => ({ ...s, data: change(s.data) }))}
-        activeSection={section}
-        selectedTemplate={state.template}
-        plainEditors
-        onAddEntry={(id) => {
-          // A new entry is asked for step by step, like the first one, not as a blank form.
-          if (!isListSection(id as SectionId)) return;
-          const sec = id as ListSection;
-          const index = items(state, sec).length;
-          const next = update(addItem(state, sec));
-          goStep(firstStepOfItem(next, sec, index));
-        }}
-      />
-    </div>
   );
 }
 
@@ -430,21 +374,23 @@ export function EditSection() {
   if (!section) return <Navigate to="/edit" replace />;
   if (isUnderReview(state)) return <Navigate to="/cv" replace />;
   const issues = sectionIssues(state, section);
+  // Mid-way through the questions, "Done" goes back to where she was; with every section done, to her CV.
+  const steps = buildSteps(state);
+  const resume = firstFailingSection(state) ? (steps.find((st) => st.key === state.lastStep)?.key ?? steps[0].key) : null;
+  const done = () => (resume ? goStep(resume) : navigate("/cv"));
   return (
     <Screen title="Review and edit" label={<SectionsMenu current={section} />} wide>
+      <Hint>Tap anything to change it.</Hint>
       {issues.map((i) => (
         <Banner key={i.message} tone="warn">
           {i.message}
         </Banner>
       ))}
-      <SectionEditor section={section} />
+      <SectionOverview section={section} />
       <Actions>
-        <BigButton className="mt-4" onClick={() => navigate("/edit")}>
-          Done
+        <BigButton className="mt-4" onClick={done}>
+          {resume ? "Done, continue where I left off" : "Done, see my CV"}
         </BigButton>
-        {sectionIncluded(state, section) && (
-          <LinkButton onClick={() => goStep(firstStepOfSection(state, section))}>Answer the questions again instead</LinkButton>
-        )}
       </Actions>
     </Screen>
   );
@@ -794,7 +740,7 @@ export function Improve() {
           {i.message}
         </Banner>
       ))}
-      <SectionEditor section={section} />
+      <SectionOverview section={section} />
       <Actions>
         <BigButton
           className="mt-4"

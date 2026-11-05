@@ -1,9 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Navigate, useNavigate, useParams } from "react-router-dom";
+import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, FileText, Maximize2, Minimize2, Plus, ZoomIn, ZoomOut, X } from "lucide-react";
 import { TEMPLATE_IDS, TEMPLATE_NAMES, templateSupportsPhoto, type TemplateId } from "@/utils/templates";
-import { useGuided } from "./GuidedContext";
+import { backParam, returnTo, useGuided } from "./GuidedContext";
+import { itemLabel } from "./answers";
 import { SECTIONS, hasEnteredAnything, isUnderReview, sectionDef, sectionNumber, type GuidedState, type ListSection, type SectionId } from "./state";
 import {
   addItem,
@@ -66,12 +67,19 @@ export function StepScreen() {
   );
 }
 
+/** "Save" for a question opened from a section overview (it returns there), "Next" in the normal flow. */
+function NextLabel() {
+  return <>{backParam(useLocation().search) ? "Save" : "Next"}</>;
+}
+
 function TrackedStep({ step, bar, label }: { step: Step; bar: { total: number; current: number; within: number }; label: ReactNode }) {
   const { update } = useGuided();
+  const editing = backParam(useLocation().search) !== null;
   useEffect(() => {
-    update((s) => (s.lastStep === step.key ? s : { ...s, lastStep: step.key }));
+    // Editing one answer from an overview doesn't move where "Continue" picks up.
+    if (!editing) update((s) => (s.lastStep === step.key ? s : { ...s, lastStep: step.key }));
     window.scrollTo({ top: 0 });
-  }, [step.key, update]);
+  }, [editing, step.key, update]);
   return (
     <Screen sections={bar} label={label} aside={<LivePreview />} headerAction={<MyCvButton />}>
       {/* key forces fresh local state per step */}
@@ -332,6 +340,10 @@ type StepOf<K extends Step["kind"]> = Extract<Step, { kind: K }>;
 
 function SkipForNow({ step }: { step: Step }) {
   const { state, advance } = useGuided();
+  const navigate = useNavigate();
+  // Changing one answer from a section overview: leave without saving.
+  const back = backParam(useLocation().search);
+  if (back) return <LinkButton onClick={() => returnTo(navigate, back)}>Cancel</LinkButton>;
   return <LinkButton onClick={() => advance(state, step.key)}>Skip for now</LinkButton>;
 }
 
@@ -455,7 +467,7 @@ function TextStep({ step }: { step: StepOf<"text"> }) {
       )}
       <Actions>
         <BigButton type="submit" disabled={!value.trim()}>
-          Next
+          <NextLabel />
         </BigButton>
         {step.skip ? (
           <LinkButton onClick={() => advance(step.set(state, ""), step.key)}>{step.skip}</LinkButton>
@@ -508,7 +520,7 @@ function ChoiceStep({ step }: { step: StepOf<"choice"> }) {
           <TextInput autoFocus value={other} placeholder="Type it here" onChange={(e) => (setOther(e.target.value), setError(null))} />
           <FieldError>{error}</FieldError>
           <BigButton type="submit" className="mt-3" disabled={!other.trim()}>
-            Next
+            <NextLabel />
           </BigButton>
         </form>
       )}
@@ -610,7 +622,7 @@ function MonthStep({ step }: { step: StepOf<"month"> }) {
       <FieldError>{error}</FieldError>
       <Actions>
         <BigButton type="submit" disabled={!month || !year}>
-          Next
+          <NextLabel />
         </BigButton>
         {step.skip ? (
           <LinkButton onClick={() => advance(step.set(state, ""), step.key)}>{step.skip}</LinkButton>
@@ -735,7 +747,7 @@ function DescribeStep({ step }: { step: StepOf<"describe"> }) {
       <HelpButton onClick={() => setHelping(true)}>Need help? Answer 3 short questions</HelpButton>
       <FieldError>{error}</FieldError>
       <Actions>
-        <BigButton onClick={save}>Next</BigButton>
+        <BigButton onClick={save}><NextLabel /></BigButton>
         <SkipForNow step={step} />
       </Actions>
     </>
@@ -785,27 +797,13 @@ function ToolsStep({ step }: { step: StepOf<"tools"> }) {
         </button>
       </form>
       <Actions>
-        <BigButton onClick={() => advance(setItem(state, sec, step.index, { technologies: selected.join(", ") }), step.key)}>Next</BigButton>
+        <BigButton onClick={() => advance(setItem(state, sec, step.index, { technologies: selected.join(", ") }), step.key)}><NextLabel /></BigButton>
       </Actions>
     </>
   );
 }
 
 // ---------- add another ----------
-
-function itemLabel(sec: ListSection, it: Record<string, unknown>): string {
-  const v = (k: string) => String(it[k] ?? "").trim();
-  const parts: Record<ListSection, string[]> = {
-    education: [[v("degree"), v("field")].filter(Boolean).join(" "), v("school")],
-    experience: [v("position"), v("company")],
-    projects: [v("name")],
-    achievements: [v("title")],
-    awards: [v("title")],
-    certifications: [v("name"), v("issuer")],
-    publications: [v("title")],
-  };
-  return parts[sec].filter(Boolean).join(", ") || "Not filled in yet";
-}
 
 function MoreStep({ step }: { step: StepOf<"more"> }) {
   const { state, advance, goStep, update } = useGuided();
@@ -822,6 +820,8 @@ function MoreStep({ step }: { step: StepOf<"more"> }) {
 
   return (
     <>
+      <Question>{sec === "education" && schoolOptions.length ? "What's next?" : "Add another?"}</Question>
+      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">Added so far · tap one to edit it</p>
       <div className="mt-2 space-y-2">
         {list.map((it, index) => (
           <button
@@ -836,7 +836,6 @@ function MoreStep({ step }: { step: StepOf<"more"> }) {
           </button>
         ))}
       </div>
-      <Question>{sec === "education" && schoolOptions.length ? "What's next?" : "Add another?"}</Question>
       <div className="mt-5 space-y-2.5">
         {schoolOptions.map((c) => (
           <Option key={c} onClick={() => add({ degree: c })} className="justify-center text-center">
@@ -913,7 +912,7 @@ function SummaryStep({ step }: { step: StepOf<"summary"> }) {
       <p className="mt-3 text-xs text-slate-400">You can come back and improve this once the rest of your CV is done.</p>
       <Actions>
         <BigButton onClick={save} disabled={!text.trim()}>
-          Next
+          <NextLabel />
         </BigButton>
         <SkipForNow step={step} />
       </Actions>
@@ -1001,7 +1000,7 @@ function SkillsStep({ step }: { step: StepOf<"skills"> }) {
       <Actions>
         <p className="mb-2 text-center text-sm text-slate-500">{selected.length} selected</p>
         <BigButton onClick={save} disabled={selected.length < 2}>
-          Next
+          <NextLabel />
         </BigButton>
         <SkipForNow step={step} />
       </Actions>
@@ -1046,7 +1045,7 @@ function LevelsStep({ step }: { step: StepOf<"levels"> }) {
       </div>
       {skills.length === 0 && <Hint>Add skills on the previous screen first.</Hint>}
       <Actions>
-        <BigButton onClick={() => advance(state, step.key)}>Next</BigButton>
+        <BigButton onClick={() => advance(state, step.key)}><NextLabel /></BigButton>
       </Actions>
     </>
   );

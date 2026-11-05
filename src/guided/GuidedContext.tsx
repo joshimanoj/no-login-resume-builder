@@ -1,16 +1,22 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, type NavigateFunction } from "react-router-dom";
 import { clearState, hasEnteredAnything, initialState, loadState, saveState, type GuidedState } from "./state";
 import { buildSteps } from "./steps";
+import { answerText, entryOf } from "./answers";
 import { pullCv, pullSubmissions, pushCv, signOut as backendSignOut, usingMock, watchUser } from "./backend";
 
 interface GuidedContextValue {
   state: GuidedState;
   /** Replace the state. Returns the new state so callers can navigate from it. */
   update: (next: GuidedState | ((s: GuidedState) => GuidedState)) => GuidedState;
-  /** Save `next`, then go to the step after `fromKey` in the flow built from `next`. */
+  /**
+   * Save `next`, then go to the step after `fromKey` in the flow built from `next`. A question opened
+   * from a section overview (with `back`) returns there instead, unless her answer opened a new
+   * question for the same entry (e.g. "No, I finished" asks when).
+   */
   advance: (next: GuidedState, fromKey: string) => void;
-  goStep: (key: string) => void;
+  /** Open a question; with `back`, saving it returns to that page. */
+  goStep: (key: string, back?: string) => void;
   /** False until we know whether she's signed in (and her saved CV has loaded). */
   authReady: boolean;
   signOut: () => Promise<void>;
@@ -18,7 +24,17 @@ interface GuidedContextValue {
 
 const GuidedContext = createContext<GuidedContextValue | null>(null);
 
-export const stepPath = (key: string) => `/s/${key}`;
+export const stepPath = (key: string, back?: string) => `/s/${key}${back ? `?back=${encodeURIComponent(back)}` : ""}`;
+
+/** Where a question opened from a section overview returns to (null in the normal flow). Only in-app paths. */
+export const backParam = (search: string) => {
+  const back = new URLSearchParams(search).get("back");
+  return back?.startsWith("/") && !back.startsWith("//") ? back : null;
+};
+
+/** Back to the overview a question was opened from: a step back in history (so the phone's Back button doesn't reopen the question), or straight there if she opened the question directly. */
+export const returnTo = (navigate: NavigateFunction, back: string) =>
+  (window.history.state?.idx ?? 0) > 0 ? navigate(-1) : navigate(back, { replace: true });
 
 /** The parts of the state saved to her account. */
 const SYNCED = ["data", "template", "answers", "prompts", "improved"] as const;
@@ -33,6 +49,7 @@ export function GuidedProvider({ children }: { children: ReactNode }) {
   const loadedFor = useRef<string | null>(null);
   const lastPushed = useRef<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Save straight away: students often close the tab right after answering.
   useEffect(() => saveState(state), [state]);
@@ -103,7 +120,7 @@ export function GuidedProvider({ children }: { children: ReactNode }) {
     update(initialState());
   }, [update]);
 
-  const goStep = useCallback((key: string) => navigate(stepPath(key)), [navigate]);
+  const goStep = useCallback((key: string, back?: string) => navigate(stepPath(key, back)), [navigate]);
 
   const advance = useCallback<GuidedContextValue["advance"]>(
     (next, fromKey) => {
@@ -111,10 +128,17 @@ export function GuidedProvider({ children }: { children: ReactNode }) {
       const steps = buildSteps(next);
       const i = steps.findIndex((st) => st.key === fromKey);
       const following = steps[i + 1];
+      const back = backParam(location.search);
+      if (back) {
+        const opensMore = following && entryOf(following.key) === entryOf(fromKey) && !answerText(following, next);
+        if (opensMore) navigate(stepPath(following.key, back), { replace: true });
+        else returnTo(navigate, back);
+        return;
+      }
       // After the last section comes the last step: choosing a look.
       navigate(following ? stepPath(following.key) : "/look");
     },
-    [navigate, update],
+    [location.search, navigate, update],
   );
 
   return (

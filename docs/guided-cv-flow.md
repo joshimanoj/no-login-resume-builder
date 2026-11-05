@@ -209,6 +209,14 @@ To request from the CURIE team:
 - Education is second, before Work Experience.
 - The download checklist is replaced by section checks.
 - No languages field.
+- From the Nov 3, 2026 review with Vijay:
+  - The section bar is prominent and on every question, edit and improve screen; "All sections" opens any section from anywhere. Home lists all 9 sections with their status.
+  - A section's edit screen is an overview in the new style, not the original builder's form: every answer is listed and opens its own question ("Save" returns to the overview). Entries are added step by step, or deleted. The original form is used only by the original builder (/classic).
+  - "My CV" is "Preview my CV"; its full view shows every look as a small picture of her CV.
+  - "Describe it" shows which entry it is about (role and company).
+  - Home is on every page except Home itself.
+  - The downloaded PDF is the original builder's, unchanged, for every look (checked by e2e/pdf-parity.spec.ts).
+  - Showing previous entries while adding another (for context) is Vijay's call; not done yet.
 
 ## Open questions
 1. What happens if the 10th attempt is not accepted? (For example: the CV stays as is with its last review, and a mentor at VigyanShaala is contacted, or attempts reset after a cool-off.)

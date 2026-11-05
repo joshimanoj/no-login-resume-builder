@@ -61,7 +61,8 @@ export function Screen({
                 <ChevronLeft className="h-6 w-6" />
               </button>
             )}
-            {back && (
+            {/* Home is on every page but Home itself, including hubs without a Back button (Your CV, the review). */}
+            {(back || title) && (
               <Link to="/" aria-label="Home" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-primary active:bg-slate-100">
                 <Home className="h-5 w-5" />
               </Link>

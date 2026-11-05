@@ -8,12 +8,25 @@ test.beforeEach(async ({ page }) => {
   await page.route(/supabase\.co/, (route) => route.fulfill({ status: 201, contentType: "application/json", body: "[]" }));
 });
 
-const next = (page: Page) => page.getByRole("button", { name: "Next", exact: true }).click();
+// "Save" when the question was opened from a section overview.
+const next = (page: Page) => page.getByRole("button", { name: /^(Next|Save)$/ }).click();
 const tap = (page: Page, name: string) => page.getByRole("button", { name, exact: true }).click();
 
 async function answer(page: Page, text: string) {
   await page.getByRole("textbox").fill(text);
   await next(page);
+}
+
+/** The demo CV as a returning student sees it: home says "Welcome back" and lists the sections. */
+async function returningStudent(page: Page) {
+  await page.goto("/demo");
+  await expect(page).toHaveURL(/\/$/);
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem("guided-cv-v1") ?? "{}");
+    localStorage.setItem("guided-cv-v1", JSON.stringify({ ...saved, lastStep: "publications.check" }));
+  });
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Welcome back, Asha!" })).toBeVisible();
 }
 
 /** Enters "2023-07" the way a student would: picks the month, types the year. */
@@ -137,11 +150,15 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   await expect(page.getByText("Needs another attempt")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("Add a few more skills that fit the roles you want.")).toBeVisible();
 
-  // Improve Skills using the full section form, then submit again
+  // Improve Skills from the section overview (same questions, no old form), then submit again
   await tap(page, "Improve this section");
   await expect(page.getByText("Curie said:")).toBeVisible();
-  await page.getByRole("button", { name: "Add Skill" }).click();
-  await page.getByPlaceholder("Skill name (e.g., JavaScript, Project Management)").last().fill("Python");
+  await page.getByRole("region", { name: "Skills" }).getByRole("button", { name: /^Skills/ }).click();
+  await page.getByPlaceholder("Add your own").fill("Python");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await tap(page, "Save");
+  await expect(page).toHaveURL(/\/improve\/skills$/);
+  await expect(page.getByRole("region", { name: "Skills" }).getByRole("button", { name: /^Skills.*Python/ })).toBeVisible();
   await tap(page, "Done, back to my review");
   await expect(page.getByText("✓ Improved")).toBeVisible();
   await tap(page, "Submit again");
@@ -201,21 +218,31 @@ test("the demo CV passes every section check and can be submitted", async ({ pag
   await expect(page.getByRole("textbox", { name: "Point 1", exact: true })).toHaveValue("Built 5 pages of the company website.");
 });
 
-test("editing a section uses plain boxes, not a formatting toolbar", async ({ page }) => {
-  await page.goto("/demo?to=cv");
-  await expect(page).toHaveURL(/\/cv$/);
-  await page.goto("/edit/projects");
+test("a section's edit screen shows every answer in the new style; each opens its own question and saving returns", async ({ page }) => {
+  await returningStudent(page);
+  await page.getByRole("button", { name: /5\. Projects/ }).click();
+  await expect(page).toHaveURL(/\/edit\/projects$/);
+  // None of the old builder's form: no rich-text toolbar, no "Add Project" form button.
   await expect(page.locator(".ql-toolbar")).toHaveCount(0);
-  const firstPoint = page.getByRole("textbox", { name: "Description point 1" }).first();
-  await expect(firstPoint).toHaveValue("Made a website for the college fest.");
-  await page.getByRole("button", { name: "Add another point" }).first().click();
-  await page.getByRole("textbox", { name: "Description point 2" }).first().fill("Used by about 300 students during the fest.");
-  await page.goto("/cv");
-  await expect(page.locator("text=Used by about 300 students during the fest.").first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Add Project" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /What you did.*Made a website for the college fest\./ })).toBeVisible();
+
+  await page.getByRole("button", { name: /What you did.*Made a website for the college fest\./ }).click();
+  await expect(page.getByRole("heading", { name: "Describe it" })).toBeVisible();
+  await page.getByRole("button", { name: "Add another point" }).click();
+  await page.getByRole("textbox", { name: "Point 2", exact: true }).fill("Used by about 300 students during the fest.");
+  await tap(page, "Save");
+  await expect(page).toHaveURL(/\/edit\/projects$/);
+  await expect(page.getByRole("button", { name: /Used by about 300 students during the fest\./ })).toBeVisible();
+  // The phone's Back button goes to where she came from, not back into the question.
+  await page.goBack();
+  await expect(page).toHaveURL(/\/$/);
 
   await page.goto("/edit/personal");
-  await expect(page.locator(".ql-toolbar")).toHaveCount(0);
-  await expect(page.getByRole("textbox", { name: "Professional Summary *" })).toHaveValue(/I am a 3rd-year B\.Sc\. Physics student/);
+  await expect(page.getByRole("button", { name: /Professional summary.*I am a 3rd-year B\.Sc\. Physics student/ })).toBeVisible();
+  await page.getByRole("button", { name: /Phone/ }).click();
+  await tap(page, "Cancel");
+  await expect(page).toHaveURL(/\/edit\/personal$/);
 });
 
 test.describe("on a laptop", () => {
@@ -299,13 +326,42 @@ test("from any question she can see every section and jump to one", async ({ pag
   await expect(page.getByRole("button", { name: /Education.*All sections/ })).toBeVisible();
 });
 
-test("adding an entry from a section's edit screen asks the questions, not the old form", async ({ page }) => {
+test("adding an entry from a section's edit screen asks the questions, then comes back", async ({ page }) => {
   await page.goto("/demo");
   await expect(page).toHaveURL(/\/$/);
   await page.goto("/edit/experience");
-  await page.getByRole("button", { name: /Add Experience/ }).click();
-  await expect(page).toHaveURL(/\/s\/experience\.2\.type$/);
+  await page.getByRole("button", { name: "Add another internship or job" }).click();
+  await expect(page).toHaveURL(/\/s\/experience\.2\.type\?back=/);
   await expect(page.getByRole("heading", { name: "Was it an internship or a job?" })).toBeVisible();
+  await page.getByRole("button", { name: "Job", exact: true }).click();
+  await page.getByRole("textbox").fill("Sharma Tutorials");
+  await tap(page, "Save");
+  await page.getByRole("textbox").fill("Maths Tutor");
+  await tap(page, "Save");
+  await page.getByRole("button", { name: "It was online" }).click();
+  await month(page, "2024-06");
+  await page.getByRole("button", { name: "No", exact: true }).click();
+  await month(page, "2025-03");
+  await page.getByRole("textbox", { name: "Point 1", exact: true }).fill("Taught maths to 12 Class 9 students.");
+  await tap(page, "Save");
+  await expect(page).toHaveURL(/\/edit\/experience$/);
+  await expect(page.getByRole("heading", { name: "Maths Tutor, Sharma Tutorials" })).toBeVisible();
+
+  // Delete asks first, then removes the entry.
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Delete Maths Tutor, Sharma Tutorials" }).click();
+  await expect(page.getByRole("heading", { name: "Maths Tutor, Sharma Tutorials" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Research Intern/ })).toBeVisible();
+});
+
+test("an entry she starts adding and backs out of isn't left behind", async ({ page }) => {
+  await returningStudent(page);
+  await page.getByRole("button", { name: /3\. Work Experience/ }).click();
+  await page.getByRole("button", { name: "Add another internship or job" }).click();
+  await expect(page.getByRole("heading", { name: "Was it an internship or a job?" })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(/\/edit\/experience$/);
+  await expect(page.getByRole("heading", { name: "Not filled in yet" })).toHaveCount(0);
 });
 
 test("entries on the 'add another' screen open for editing", async ({ page }) => {

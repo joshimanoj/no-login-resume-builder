@@ -8,7 +8,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, Upload, Image } from "lucide-react";
 import { ResumeData } from "./ResumeBuilder";
 import { RichTextEditor } from "./RichTextEditor";
-import { ParagraphEditor, PointsEditor } from "./PlainTextEditors";
 import { PhotoCropDialog } from "./PhotoCropDialog";
 import { useRef, useState } from "react";
 import { todayIsoDate, toTitleCase } from "@/utils/resumeRules";
@@ -20,16 +19,11 @@ interface ResumeFormProps {
   setResumeData: (update: (prev: ResumeData) => ResumeData) => void;
   activeSection: string;
   selectedTemplate: string;
-  /** Plain boxes instead of the rich-text editor (guided flow): the look decides formatting, students edit words. */
-  plainEditors?: boolean;
-  /** When set, "Add …" hands over to the caller (the guided flow asks for a new entry step by step) instead of adding a blank form. */
-  onAddEntry?: (section: string) => void;
 }
 
-export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedTemplate, plainEditors = false, onAddEntry }: ResumeFormProps) => {
+export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedTemplate }: ResumeFormProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
-  const addHandler = (section: string, addBlank: () => void) => (onAddEntry ? () => onAddEntry(section) : addBlank);
   
   const supportsPhoto = templateSupportsPhoto(selectedTemplate);
   
@@ -380,23 +374,13 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
           </div>
         </div>
         <div>
-          {plainEditors ? (
-            <ParagraphEditor
-              key="summary"
-              label="Professional Summary *"
-              value={resumeData.personalInfo.summary}
-              onChange={(value) => updatePersonalInfo("summary", value)}
-              placeholder="Brief professional summary highlighting your key achievements and skills..."
-            />
-          ) : (
-            <RichTextEditor
-              label="Professional Summary *"
-              value={resumeData.personalInfo.summary}
-              onChange={(value) => updatePersonalInfo("summary", value)}
-              placeholder="Brief professional summary highlighting your key achievements and skills..."
-              height="250px"
-            />
-          )}
+          <RichTextEditor
+            label="Professional Summary *"
+            value={resumeData.personalInfo.summary}
+            onChange={(value) => updatePersonalInfo("summary", value)}
+            placeholder="Brief professional summary highlighting your key achievements and skills..."
+            height="250px"
+          />
         </div>
         {supportsPhoto && (
           <div>
@@ -447,7 +431,7 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
     <Card className="shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Work Experience</CardTitle>
-        <Button onClick={addHandler("experience", addExperience)} size="sm" className="flex items-center space-x-1">
+        <Button onClick={addExperience} size="sm" className="flex items-center space-x-1">
           <Plus className="h-4 w-4" />
           <span>Add Experience</span>
         </Button>
@@ -541,23 +525,13 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
               )}
             </div>
             <div>
-              {plainEditors ? (
-                <PointsEditor
-                  key={exp.id}
-                  label="Description"
-                  value={exp.description}
-                  onChange={(value) => updateExperience(exp.id, "description", value)}
-                  placeholder="Describe your responsibilities and achievements..."
-                />
-              ) : (
-                <RichTextEditor
-                  label="Description"
-                  value={exp.description}
-                  onChange={(value) => updateExperience(exp.id, "description", value)}
-                  placeholder="Describe your responsibilities and achievements..."
-                  height="200px"
-                />
-              )}
+              <RichTextEditor
+                label="Description"
+                value={exp.description}
+                onChange={(value) => updateExperience(exp.id, "description", value)}
+                placeholder="Describe your responsibilities and achievements..."
+                height="200px"
+              />
             </div>
           </div>
         ))}
@@ -575,7 +549,7 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
     <Card className="shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Education</CardTitle>
-        <Button onClick={addHandler("education", addEducation)} size="sm" className="flex items-center space-x-1">
+        <Button onClick={addEducation} size="sm" className="flex items-center space-x-1">
           <Plus className="h-4 w-4" />
           <span>Add Education</span>
         </Button>
@@ -763,7 +737,7 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
     <Card className="shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Projects</CardTitle>
-        <Button onClick={addHandler("projects", addProject)} size="sm" className="flex items-center space-x-1">
+        <Button onClick={addProject} size="sm" className="flex items-center space-x-1">
           <Plus className="h-4 w-4" />
           <span>Add Project</span>
         </Button>
@@ -809,23 +783,13 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
               </div>
             </div>
             <div>
-              {plainEditors ? (
-                <PointsEditor
-                  key={project.id}
-                  label="Description"
-                  value={project.description}
-                  onChange={(value) => updateProject(project.id, "description", value)}
-                  placeholder="Describe the project, your role, and key achievements..."
-                />
-              ) : (
-                <RichTextEditor
-                  label="Description"
-                  value={project.description}
-                  onChange={(value) => updateProject(project.id, "description", value)}
-                  placeholder="Describe the project, your role, and key achievements..."
-                  height="200px"
-                />
-              )}
+              <RichTextEditor
+                label="Description"
+                value={project.description}
+                onChange={(value) => updateProject(project.id, "description", value)}
+                placeholder="Describe the project, your role, and key achievements..."
+                height="200px"
+              />
             </div>
           </div>
         ))}
@@ -843,7 +807,7 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
     <Card className="shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Achievements</CardTitle>
-        <Button onClick={addHandler("achievements", addAchievement)} size="sm" className="flex items-center space-x-1">
+        <Button onClick={addAchievement} size="sm" className="flex items-center space-x-1">
           <Plus className="h-4 w-4" />
           <span>Add Achievement</span>
         </Button>
@@ -881,23 +845,13 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
               </div>
             </div>
             <div>
-              {plainEditors ? (
-                <PointsEditor
-                  key={achievement.id}
-                  label="Description"
-                  value={achievement.description}
-                  onChange={(value) => updateAchievement(achievement.id, "description", value)}
-                  placeholder="Describe your achievement..."
-                />
-              ) : (
-                <RichTextEditor
-                  label="Description"
-                  value={achievement.description}
-                  onChange={(value) => updateAchievement(achievement.id, "description", value)}
-                  placeholder="Describe your achievement..."
-                  height="200px"
-                />
-              )}
+              <RichTextEditor
+                label="Description"
+                value={achievement.description}
+                onChange={(value) => updateAchievement(achievement.id, "description", value)}
+                placeholder="Describe your achievement..."
+                height="200px"
+              />
             </div>
           </div>
         ))}
@@ -915,7 +869,7 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
     <Card className="shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Awards</CardTitle>
-        <Button onClick={addHandler("awards", addAward)} size="sm" className="flex items-center space-x-1">
+        <Button onClick={addAward} size="sm" className="flex items-center space-x-1">
           <Plus className="h-4 w-4" />
           <span>Add Award</span>
         </Button>
@@ -961,23 +915,13 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
               </div>
             </div>
             <div>
-              {plainEditors ? (
-                <ParagraphEditor
-                  key={award.id}
-                  label="Description *"
-                  value={award.description || ""}
-                  onChange={(value) => updateAward(award.id, "description", value)}
-                  placeholder="Describe the award and your achievement..."
-                />
-              ) : (
-                <RichTextEditor
-                  label="Description *"
-                  value={award.description || ""}
-                  onChange={(value) => updateAward(award.id, "description", value)}
-                  placeholder="Describe the award and your achievement..."
-                  height="200px"
-                />
-              )}
+              <RichTextEditor
+                label="Description *"
+                value={award.description || ""}
+                onChange={(value) => updateAward(award.id, "description", value)}
+                placeholder="Describe the award and your achievement..."
+                height="200px"
+              />
             </div>
           </div>
         ))}
@@ -995,7 +939,7 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
     <Card className="shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Courses & Certifications</CardTitle>
-        <Button onClick={addHandler("certifications", addCertification)} size="sm" className="flex items-center space-x-1">
+        <Button onClick={addCertification} size="sm" className="flex items-center space-x-1">
           <Plus className="h-4 w-4" />
           <span>Add Certification</span>
         </Button>
@@ -1081,7 +1025,7 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
     <Card className="shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Publications</CardTitle>
-        <Button onClick={addHandler("publications", addPublication)} size="sm" className="flex items-center space-x-1">
+        <Button onClick={addPublication} size="sm" className="flex items-center space-x-1">
           <Plus className="h-4 w-4" />
           <span>Add Publication</span>
         </Button>
