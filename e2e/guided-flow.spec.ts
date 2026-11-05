@@ -231,9 +231,9 @@ test.describe("on a laptop", () => {
     await page.getByRole("button", { name: "Full view" }).click();
     const fullView = page.getByRole("dialog", { name: "Your CV, full view" });
     await expect(fullView).toBeVisible();
-    await expect(fullView.getByText("Classic")).toBeVisible();
+    await expect(fullView.getByText("Your CV · Classic")).toBeVisible();
     await fullView.getByRole("button", { name: "Next look" }).click();
-    await expect(fullView.getByText("Shaded Headers")).toBeVisible();
+    await expect(fullView.getByText("Your CV · Shaded Headers")).toBeVisible();
     await fullView.getByRole("button", { name: "Back to questions" }).click();
     await expect(fullView).toHaveCount(0);
     await expect(page.getByText("Your CV so far · Shaded Headers")).toBeVisible();
@@ -250,6 +250,8 @@ test("on a shared phone, another student can clear the previous CV", async ({ pa
   await page.reload();
   await expect(page.getByRole("heading", { name: "Welcome back, Asha!" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Continue as Asha" })).toBeVisible();
+  // Home shows every section, and any of them opens from here.
+  await expect(page.getByRole("button", { name: /9\. Publications/ })).toBeVisible();
 
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "I'm not Asha: start a new CV" }).click();
@@ -261,9 +263,14 @@ test("on a phone, the CV opens from the top bar and peeks after each section", a
   await page.goto("/demo");
   await expect(page).toHaveURL(/\/$/);
   await page.goto("/s/experience.0.about");
-  await page.getByRole("button", { name: "My CV" }).click();
+  // Describe it says which entry it's about.
+  await expect(page.getByText("Web Development Intern, Ankur Tech Solutions")).toBeVisible();
+  await page.getByRole("button", { name: "Preview my CV" }).click();
   const fullView = page.getByRole("dialog", { name: "Your CV, full view" });
   await expect(fullView).toContainText("Web Development Intern");
+  // Every look is shown as a small picture; tapping one switches to it.
+  await fullView.getByRole("radio", { name: "Modern" }).click();
+  await expect(fullView.getByText("Your CV · Modern")).toBeVisible();
   await expect(fullView.getByRole("button", { name: "Zoom: fit to screen" })).toBeVisible();
   await fullView.getByRole("button", { name: "Zoom in" }).click();
   await fullView.getByRole("button", { name: "Zoom in" }).click();
@@ -282,12 +289,31 @@ test("from any question she can see every section and jump to one", async ({ pag
   await page.goto("/demo");
   await expect(page).toHaveURL(/\/$/);
   await page.goto("/s/skills.pick");
-  await page.getByRole("button", { name: /Skills · 4 of 9/ }).click();
+  await page.getByRole("button", { name: /Skills.*All sections/ }).click();
   const list = page.getByRole("dialog");
   await expect(list.getByText("Your sections")).toBeVisible();
   await expect(list.getByRole("button")).toContainText(["1. Personal Information", "2. Education", "3. Work Experience"]);
   await list.getByRole("button", { name: /2\. Education/ }).click();
   await expect(page).toHaveURL(/\/edit\/education$/);
+  // The section bar is on the edit screen too.
+  await expect(page.getByRole("button", { name: /Education.*All sections/ })).toBeVisible();
+});
+
+test("adding an entry from a section's edit screen asks the questions, not the old form", async ({ page }) => {
+  await page.goto("/demo");
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/edit/experience");
+  await page.getByRole("button", { name: /Add Experience/ }).click();
+  await expect(page).toHaveURL(/\/s\/experience\.2\.type$/);
+  await expect(page.getByRole("heading", { name: "Was it an internship or a job?" })).toBeVisible();
+});
+
+test("entries on the 'add another' screen open for editing", async ({ page }) => {
+  await page.goto("/demo");
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/s/experience.more");
+  await page.getByRole("button", { name: /Research Intern/ }).click();
+  await expect(page).toHaveURL(/\/s\/experience\.1\./);
 });
 
 test("marks can be left out only for a degree she's still studying", async ({ page }) => {

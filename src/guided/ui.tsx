@@ -76,7 +76,7 @@ export function Screen({
             {headerAction}
           </div>
         )}
-        {label && <div className="mt-2 text-xs font-medium text-[hsl(88_45%_30%)]">{label}</div>}
+        {label && <div className="mb-3 mt-2 text-xs font-medium text-[hsl(88_45%_30%)]">{label}</div>}
         <div className="flex flex-1 flex-col">{children}</div>
       </div>
       {aside && (

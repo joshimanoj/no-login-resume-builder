@@ -22,11 +22,14 @@ interface ResumeFormProps {
   selectedTemplate: string;
   /** Plain boxes instead of the rich-text editor (guided flow): the look decides formatting, students edit words. */
   plainEditors?: boolean;
+  /** When set, "Add …" hands over to the caller (the guided flow asks for a new entry step by step) instead of adding a blank form. */
+  onAddEntry?: (section: string) => void;
 }
 
-export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedTemplate, plainEditors = false }: ResumeFormProps) => {
+export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedTemplate, plainEditors = false, onAddEntry }: ResumeFormProps) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const addHandler = (section: string, addBlank: () => void) => (onAddEntry ? () => onAddEntry(section) : addBlank);
   
   const supportsPhoto = templateSupportsPhoto(selectedTemplate);
   
@@ -444,7 +447,7 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
     <Card className="shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Work Experience</CardTitle>
-        <Button onClick={addExperience} size="sm" className="flex items-center space-x-1">
+        <Button onClick={addHandler("experience", addExperience)} size="sm" className="flex items-center space-x-1">
           <Plus className="h-4 w-4" />
           <span>Add Experience</span>
         </Button>
@@ -572,7 +575,7 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
     <Card className="shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Education</CardTitle>
-        <Button onClick={addEducation} size="sm" className="flex items-center space-x-1">
+        <Button onClick={addHandler("education", addEducation)} size="sm" className="flex items-center space-x-1">
           <Plus className="h-4 w-4" />
           <span>Add Education</span>
         </Button>
@@ -760,7 +763,7 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
     <Card className="shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Projects</CardTitle>
-        <Button onClick={addProject} size="sm" className="flex items-center space-x-1">
+        <Button onClick={addHandler("projects", addProject)} size="sm" className="flex items-center space-x-1">
           <Plus className="h-4 w-4" />
           <span>Add Project</span>
         </Button>
@@ -840,7 +843,7 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
     <Card className="shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Achievements</CardTitle>
-        <Button onClick={addAchievement} size="sm" className="flex items-center space-x-1">
+        <Button onClick={addHandler("achievements", addAchievement)} size="sm" className="flex items-center space-x-1">
           <Plus className="h-4 w-4" />
           <span>Add Achievement</span>
         </Button>
@@ -912,7 +915,7 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
     <Card className="shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Awards</CardTitle>
-        <Button onClick={addAward} size="sm" className="flex items-center space-x-1">
+        <Button onClick={addHandler("awards", addAward)} size="sm" className="flex items-center space-x-1">
           <Plus className="h-4 w-4" />
           <span>Add Award</span>
         </Button>
@@ -992,7 +995,7 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
     <Card className="shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Courses & Certifications</CardTitle>
-        <Button onClick={addCertification} size="sm" className="flex items-center space-x-1">
+        <Button onClick={addHandler("certifications", addCertification)} size="sm" className="flex items-center space-x-1">
           <Plus className="h-4 w-4" />
           <span>Add Certification</span>
         </Button>
@@ -1078,7 +1081,7 @@ export const ResumeForm = ({ resumeData, setResumeData, activeSection, selectedT
     <Card className="shadow-card">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Publications</CardTitle>
-        <Button onClick={addPublication} size="sm" className="flex items-center space-x-1">
+        <Button onClick={addHandler("publications", addPublication)} size="sm" className="flex items-center space-x-1">
           <Plus className="h-4 w-4" />
           <span>Add Publication</span>
         </Button>

@@ -26,12 +26,14 @@ import {
   latestSubmission,
   sectionDef,
   type GuidedState,
+  type ListSection,
   type SectionId,
   type Submission,
 } from "./state";
 import { addItem, buildSteps, firstStepOfItem, firstStepOfSection, isListSection, items, optInKey, sectionIncluded, setAnswer } from "./steps";
 import { STATUS_TEXT, allSectionsPass, firstFailingSection, sectionIssues, sectionStatus } from "./checks";
 import { createSubmission, fetchReview, requestReview, signInWithGoogle, usingMock } from "./backend";
+import { SectionsList, SectionsMenu } from "./sections";
 import { Actions, BigButton, CurieAvatar, Hint, LinkButton, Question, Screen, Spacer, Stars } from "./ui";
 
 // ---------- sign-in ----------
@@ -174,18 +176,15 @@ export function Welcome() {
         </Hint>
       )}
       {!latest && (
-        <>
-          <Hint className="text-[15px]">
-            You've finished {doneIds.size} of {SECTIONS.length} sections.
-          </Hint>
-          <div className="mt-3 flex gap-1" aria-hidden>
-            {SECTIONS.map((d) => (
-              <div key={d.id} className={`h-1.5 flex-1 rounded-full ${doneIds.has(d.id) ? "bg-secondary" : "bg-slate-200"}`} />
-            ))}
-          </div>
-        </>
+        <Hint className="text-[15px]">
+          You've finished {doneIds.size} of {SECTIONS.length} sections.
+        </Hint>
       )}
       <AttemptHistory minimum={1} />
+      <h2 className="mt-6 text-sm font-semibold text-slate-600">Your sections</h2>
+      <div className="mt-1 rounded-xl border border-slate-200 bg-white p-1">
+        <SectionsList />
+      </div>
       {!state.user && (
         <p className="mt-5 rounded-xl bg-[#eef3f8] px-3.5 py-3 text-sm text-primary">
           Using a shared phone? Sign in with Google so your CV is saved to your account, not just this phone.
@@ -408,6 +407,14 @@ function SectionEditor({ section }: { section: SectionId }) {
         activeSection={section}
         selectedTemplate={state.template}
         plainEditors
+        onAddEntry={(id) => {
+          // A new entry is asked for step by step, like the first one, not as a blank form.
+          if (!isListSection(id as SectionId)) return;
+          const sec = id as ListSection;
+          const index = items(state, sec).length;
+          const next = update(addItem(state, sec));
+          goStep(firstStepOfItem(next, sec, index));
+        }}
       />
     </div>
   );
@@ -424,7 +431,7 @@ export function EditSection() {
   if (isUnderReview(state)) return <Navigate to="/cv" replace />;
   const issues = sectionIssues(state, section);
   return (
-    <Screen title={sectionDef(section).label} wide>
+    <Screen title="Review and edit" label={<SectionsMenu current={section} />} wide>
       {issues.map((i) => (
         <Banner key={i.message} tone="warn">
           {i.message}
@@ -775,7 +782,7 @@ export function Improve() {
   if (isUnderReview(state)) return <Navigate to="/cv" replace />;
   const issues = sectionIssues(state, section);
   return (
-    <Screen title={`Improve ${sectionDef(section).label}`} wide>
+    <Screen title={`Improve ${sectionDef(section).label}`} label={<SectionsMenu current={section} />} wide>
       <div className="sticky top-0 z-10 -mx-5 bg-white px-5 pb-2 pt-1">
         <div className="rounded-xl bg-[#fdf3e1] p-3.5 text-[15px] text-[#633806]">
           <span className="font-medium">Curie said: </span>

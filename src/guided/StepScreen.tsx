@@ -1,29 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { createPortal } from "react-dom";
 import { Navigate, useNavigate, useParams } from "react-router-dom";
-import {
-  Award,
-  BadgeCheck,
-  BookOpen,
-  Briefcase,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  FileText,
-  FolderKanban,
-  GraduationCap,
-  Maximize2,
-  Minimize2,
-  Plus,
-  Star,
-  Trophy,
-  User,
-  ZoomIn,
-  ZoomOut,
-  X,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText, Maximize2, Minimize2, Plus, ZoomIn, ZoomOut, X } from "lucide-react";
 import { TEMPLATE_IDS, TEMPLATE_NAMES, templateSupportsPhoto, type TemplateId } from "@/utils/templates";
 import { useGuided } from "./GuidedContext";
 import { SECTIONS, hasEnteredAnything, isUnderReview, sectionDef, sectionNumber, type GuidedState, type ListSection, type SectionId } from "./state";
@@ -41,8 +19,9 @@ import {
   setItem,
   type Step,
 } from "./steps";
-import { STATUS_TEXT, sectionIssues, sectionStatus, type SectionStatus } from "./checks";
+import { sectionIssues } from "./checks";
 import { CvPreview } from "./screens";
+import { SECTION_ICONS, SectionsMenu } from "./sections";
 import { PAGE_WIDTH } from "@/components/ScaledPreview";
 import { EXAMPLE_CV } from "./demo";
 import { paragraphToHtml } from "@/utils/plainText";
@@ -101,67 +80,6 @@ function TrackedStep({ step, bar, label }: { step: Step; bar: { total: number; c
   );
 }
 
-/**
- * "Personal Information · 1 of 9" is also the way to move around: it opens all 9 sections with their
- * status. A started section opens as one form to review and edit; others open at their first question.
- */
-function SectionsMenu({ current }: { current: SectionId }) {
-  const { state, goStep } = useGuided();
-  const navigate = useNavigate();
-  const [open, setOpen] = useState(false);
-  const def = sectionDef(current);
-  const go = (id: SectionId, status: SectionStatus) => {
-    setOpen(false);
-    if (status === "done" || status === "needs") navigate(`/edit/${id}`);
-    else goStep(`${id}.intro`);
-  };
-  return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>
-        <button type="button" className="-ml-1 inline-flex min-h-8 items-center gap-1 rounded-full px-1 py-0.5 hover:bg-[#eaf5e4]">
-          {def.label} · {sectionNumber(current)} of {SECTIONS.length}
-          <ChevronDown className="h-3.5 w-3.5" aria-hidden />
-          <span className="sr-only">. Show all sections</span>
-        </button>
-      </SheetTrigger>
-      <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-2xl border-none bg-white text-slate-800 md:mx-auto md:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>Your sections</SheetTitle>
-        </SheetHeader>
-        <p className="mt-1 text-sm text-slate-500">Go to any section. You can come back to this one later.</p>
-        <ul className="mt-3 divide-y divide-slate-100">
-          {SECTIONS.map((d, k) => {
-            const status = sectionStatus(state, d.id);
-            const Icon = SECTION_ICONS[d.id];
-            return (
-              <li key={d.id}>
-                <button
-                  type="button"
-                  onClick={() => go(d.id, status)}
-                  aria-current={d.id === current ? "step" : undefined}
-                  className={`flex min-h-[52px] w-full items-center gap-3 rounded-lg px-2 text-left ${d.id === current ? "bg-[#eef3f8]" : "hover:bg-slate-50"}`}
-                >
-                  <Icon className="h-5 w-5 shrink-0 text-primary" aria-hidden />
-                  <span className="flex-1 text-[15px]">
-                    {k + 1}. {d.label}
-                  </span>
-                  <span
-                    className={`text-xs ${
-                      status === "done" ? "text-[#3b6d11]" : status === "needs" ? "text-[#854F0B]" : "text-slate-400"
-                    }`}
-                  >
-                    {status === "done" ? "✓ " : status === "needs" ? "! " : ""}
-                    {STATUS_TEXT[status]}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      </SheetContent>
-    </Sheet>
-  );
-}
 
 /** The CV she sees while answering: her own once she has entered something, otherwise an example in the chosen look. */
 function useCvPreview() {
@@ -176,7 +94,28 @@ function useCvPreview() {
     needsPhoto: templateSupportsPhoto(id) && !state.data.personalInfo.photo,
     // Trying looks here pre-selects one for the last step, where the choice is confirmed (and a photo added).
     stepLook: (by: number) => update((s) => ({ ...s, template: TEMPLATE_IDS[(index + by + TEMPLATE_IDS.length) % TEMPLATE_IDS.length] })),
+    setLook: (template: TemplateId) => update((s) => ({ ...s, template })),
   };
+}
+
+/** Phones: every look as a small picture of her CV, so she can see the choices instead of guessing behind arrows. */
+function LookStrip() {
+  const { id, cv, setLook } = useCvPreview();
+  return (
+    <div className="shrink-0 border-t border-slate-300 bg-white px-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] pt-2 md:px-6">
+      <p className="text-xs font-medium text-slate-600">Looks · tap one to try it</p>
+      <div className="mt-1.5 flex gap-2.5 overflow-x-auto pb-1" role="radiogroup" aria-label="Looks">
+        {TEMPLATE_IDS.map((t) => (
+          <button key={t} type="button" role="radio" aria-checked={t === id} aria-label={TEMPLATE_NAMES[t]} onClick={() => setLook(t)} className="w-[76px] shrink-0">
+            <div className={`pointer-events-none h-[100px] overflow-hidden rounded-lg border-2 bg-white ${t === id ? "border-secondary" : "border-slate-200"}`}>
+              <CvPreview data={cv} template={t} />
+            </div>
+            <p className={`mt-1 truncate text-center text-[11px] ${t === id ? "font-semibold text-slate-900" : "text-slate-600"}`}>{TEMPLATE_NAMES[t]}</p>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function LookArrows() {
@@ -283,6 +222,7 @@ function CvFullView({ onClose }: { onClose: () => void }) {
           <CvPreview data={cv} template={id} zoom={zoom ?? undefined} />
         </div>
       </div>
+      <LookStrip />
     </div>,
     document.body,
   );
@@ -316,7 +256,7 @@ function LivePreview() {
   );
 }
 
-/** Phones and tablets: a "My CV" button in the top bar opens the full view. Desktop has the side panel instead. */
+/** Phones and tablets: a "Preview my CV" button in the top bar opens the full view. Desktop has the side panel instead. */
 function MyCvButton() {
   const [full, setFull] = useState(false);
   return (
@@ -326,7 +266,7 @@ function MyCvButton() {
         onClick={() => setFull(true)}
         className="flex h-9 shrink-0 items-center gap-1.5 rounded-full border border-slate-200 px-3 text-sm font-medium text-primary active:bg-slate-50 lg:hidden"
       >
-        <FileText className="h-4 w-4" aria-hidden /> My CV
+        <FileText className="h-4 w-4" aria-hidden /> Preview my CV
       </button>
       {full && <CvFullView onClose={() => setFull(false)} />}
     </>
@@ -460,17 +400,6 @@ function IntroStep({ step }: { step: StepOf<"intro"> }) {
   );
 }
 
-const SECTION_ICONS: Record<SectionId, LucideIcon> = {
-  personal: User,
-  education: GraduationCap,
-  experience: Briefcase,
-  skills: Star,
-  projects: FolderKanban,
-  achievements: Trophy,
-  awards: Award,
-  certifications: BadgeCheck,
-  publications: BookOpen,
-};
 
 // ---------- text ----------
 
@@ -769,6 +698,7 @@ function DescribeStep({ step }: { step: StepOf<"describe"> }) {
 
   return (
     <>
+      <p className="text-sm font-medium text-primary">{itemLabel(sec, item)}</p>
       <Question>Describe it</Question>
       <Hint>A few points, one per box. Start each with an action word: made, built, taught, organised.</Hint>
       <div className="mt-4 space-y-2.5">
@@ -893,11 +823,17 @@ function MoreStep({ step }: { step: StepOf<"more"> }) {
   return (
     <>
       <div className="mt-2 space-y-2">
-        {list.map((it) => (
-          <div key={it.id} className="flex items-center gap-3 rounded-xl border border-slate-200 px-3.5 py-3 text-[15px]">
+        {list.map((it, index) => (
+          <button
+            key={it.id}
+            type="button"
+            onClick={() => goStep(firstStepOfItem(state, sec, index))}
+            className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-slate-200 px-3.5 py-3 text-left text-[15px] active:bg-slate-50"
+          >
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary text-[11px] text-white">✓</span>
             <span className="min-w-0 flex-1 truncate">{itemLabel(sec, it)}</span>
-          </div>
+            <span className="shrink-0 text-xs text-primary">Edit</span>
+          </button>
         ))}
       </div>
       <Question>{sec === "education" && schoolOptions.length ? "What's next?" : "Add another?"}</Question>
