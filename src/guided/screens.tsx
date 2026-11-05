@@ -8,6 +8,7 @@ import { ScaledPreview } from "@/components/ScaledPreview";
 import { useToast } from "@/hooks/use-toast";
 import { generatePDF, generateWord } from "@/utils/pdfGenerator";
 import { storeResumeData } from "@/utils/resumeStorage";
+import { STORAGE_WAIT_MS, safeDownloadFilename, withTimeout, type ReadyDownload } from "@/utils/saveFile";
 import { applyTitleCaseName, validateResumeData, type ResumeData } from "@/utils/resumeRules";
 import { TEMPLATE_IDS, TEMPLATE_NAMES, templateSupportsPhoto, type TemplateId } from "@/utils/templates";
 import { stepPath, useGuided } from "./GuidedContext";
@@ -937,17 +938,22 @@ export function Download() {
   const { state } = useGuided();
   const { toast } = useToast();
   const [busy, setBusy] = useState<"pdf" | "word" | null>(null);
+  // The file normally saves on its own; some Android WebViews need a second tap on a real link.
+  const [readyFile, setReadyFile] = useState<ReadyDownload | null>(null);
   if (!canDownload(state.data)) return <Navigate to="/cv" replace />;
-  const name = state.data.personalInfo.fullName.replace(/\s+/g, "_") || "My";
+  const failed = () =>
+    toast({ title: "Download didn't work", description: "Check your internet connection and try again.", variant: "destructive" });
 
   const pdf = async () => {
     setBusy("pdf");
     try {
-      const { error } = await storeResumeData(state.data, state.template);
-      if (error) console.error("Failed to store resume data:", error);
-      await generatePDF("resume-preview", `${name}_Resume.pdf`);
+      // Recording the download must never hold up the file on a slow phone network.
+      await withTimeout(storeResumeData(state.data, state.template), STORAGE_WAIT_MS)
+        .then(({ error }) => error && console.error("Failed to store resume data:", error))
+        .catch((error) => console.error("Storing resume data timed out:", error));
+      setReadyFile(await generatePDF("resume-preview", safeDownloadFilename(state.data.personalInfo.fullName, "pdf")));
     } catch {
-      toast({ title: "Download didn't work", description: "Check your internet connection and try again.", variant: "destructive" });
+      failed();
     } finally {
       setBusy(null);
     }
@@ -956,9 +962,9 @@ export function Download() {
   const word = async () => {
     setBusy("word");
     try {
-      await generateWord(state.data, state.template, `${name}_Resume.docx`);
+      setReadyFile(await generateWord(state.data, state.template, safeDownloadFilename(state.data.personalInfo.fullName, "docx")));
     } catch {
-      toast({ title: "Download didn't work", description: "Check your internet connection and try again.", variant: "destructive" });
+      failed();
     } finally {
       setBusy(null);
     }
@@ -979,6 +985,16 @@ export function Download() {
       </div>
       <Actions>
         <div className="space-y-2">
+          {readyFile && (
+            <a
+              data-testid="save-ready-file"
+              href={readyFile.url}
+              download={readyFile.filename}
+              className="flex min-h-11 w-full items-center justify-center rounded-xl border-[1.5px] border-primary px-3 text-center text-sm font-medium text-primary"
+            >
+              Didn't save? Tap to save {readyFile.filename}
+            </a>
+          )}
           <BigButton tone="green" busy={busy === "pdf"} disabled={busy !== null} onClick={pdf}>
             Download my CV
           </BigButton>
