@@ -360,13 +360,6 @@ function StepBody({ step }: { step: Step }) {
 
 type StepOf<K extends Step["kind"]> = Extract<Step, { kind: K }>;
 
-function SkipForNow({ step }: { step: Step }) {
-  const { state, advance } = useGuided();
-  // Changing one answer from an overview: Back (beside Save) leaves without saving.
-  if (backParam(useLocation().search)) return null;
-  return <LinkButton onClick={() => advance(state, step.key)}>Skip for now</LinkButton>;
-}
-
 // ---------- intro ----------
 
 function IntroStep({ step }: { step: StepOf<"intro"> }) {
@@ -446,6 +439,12 @@ function IntroStep({ step }: { step: StepOf<"intro"> }) {
 }
 
 
+/** Beside the box of a question she can leave empty. */
+function OptionalTag({ show }: { show?: boolean }) {
+  if (!show) return null;
+  return <p className="mb-1.5 text-right text-xs font-medium text-slate-500">Optional · leave it empty if you don't have one</p>;
+}
+
 // ---------- text ----------
 
 function TextStep({ step }: { step: StepOf<"text"> }) {
@@ -468,12 +467,13 @@ function TextStep({ step }: { step: StepOf<"text"> }) {
       className="flex flex-1 flex-col"
       onSubmit={(e) => {
         e.preventDefault();
-        if (value.trim()) done(value);
+        if (value.trim() || step.optional) done(value);
       }}
     >
       <Question>{step.q}</Question>
       {step.hint && <Hint>{step.hint}</Hint>}
       <div className="mt-5">
+        <OptionalTag show={step.optional} />
         <Field
           autoFocus
           value={value}
@@ -499,14 +499,9 @@ function TextStep({ step }: { step: StepOf<"text"> }) {
         </div>
       )}
       <Actions>
-        <BigButton type="submit" disabled={!value.trim()}>
+        <BigButton type="submit" disabled={!value.trim() && !step.optional}>
           <NextLabel />
         </BigButton>
-        {step.skip ? (
-          <LinkButton onClick={() => advance(step.set(state, ""), step.key)}>{step.skip}</LinkButton>
-        ) : (
-          <SkipForNow step={step} />
-        )}
       </Actions>
     </form>
   );
@@ -540,6 +535,11 @@ function ChoiceStep({ step }: { step: StepOf<"choice"> }) {
             Something else
           </Option>
         )}
+        {step.none && (
+          <Option onClick={() => advance(step.none!.apply(state), step.key)} className={two ? "col-span-2 justify-center text-center" : ""}>
+            {step.none.label}
+          </Option>
+        )}
       </div>
       {otherOpen && (
         <form
@@ -557,13 +557,7 @@ function ChoiceStep({ step }: { step: StepOf<"choice"> }) {
           </BigButton>
         </form>
       )}
-      <Actions>
-        {step.skip ? (
-          <LinkButton onClick={() => advance(step.skip!.apply(state), step.key)}>{step.skip.label}</LinkButton>
-        ) : (
-          <SkipForNow step={step} />
-        )}
-      </Actions>
+      <Actions />
     </>
   );
 }
@@ -607,6 +601,7 @@ function MonthStep({ step }: { step: StepOf<"month"> }) {
       className="flex flex-1 flex-col"
       onSubmit={(e) => {
         e.preventDefault();
+        if (step.optional && !month && !year) return advance(step.set(state, ""), step.key);
         const joined = joinMonth(month, year);
         if ("error" in joined) return setError(joined.error);
         if (step.noFuture && joined.value > thisMonth()) return setError("This can't be in the future.");
@@ -614,7 +609,10 @@ function MonthStep({ step }: { step: StepOf<"month"> }) {
       }}
     >
       <Question>{step.q}</Question>
-      <div className="mt-5 grid grid-cols-2 gap-3">
+      <div className="mt-5">
+        <OptionalTag show={step.optional} />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
         <label className="block">
           <span className="text-sm font-medium text-slate-600">Month</span>
           <select
@@ -654,14 +652,9 @@ function MonthStep({ step }: { step: StepOf<"month"> }) {
       </div>
       <FieldError>{error}</FieldError>
       <Actions>
-        <BigButton type="submit" disabled={!month || !year}>
+        <BigButton type="submit" disabled={step.optional ? Boolean(month) !== Boolean(year) : !month || !year}>
           <NextLabel />
         </BigButton>
-        {step.skip ? (
-          <LinkButton onClick={() => advance(step.set(state, ""), step.key)}>{step.skip}</LinkButton>
-        ) : (
-          <SkipForNow step={step} />
-        )}
       </Actions>
     </form>
   );
@@ -780,7 +773,6 @@ function DescribeStep({ step }: { step: StepOf<"describe"> }) {
       <FieldError>{error}</FieldError>
       <Actions>
         <BigButton onClick={save}><NextLabel /></BigButton>
-        <SkipForNow step={step} />
       </Actions>
     </>
   );
@@ -960,7 +952,6 @@ function SummaryStep({ step }: { step: StepOf<"summary"> }) {
         <BigButton onClick={save} disabled={!text.trim()}>
           <NextLabel />
         </BigButton>
-        <SkipForNow step={step} />
       </Actions>
     </>
   );
@@ -1048,7 +1039,6 @@ function SkillsStep({ step }: { step: StepOf<"skills"> }) {
         <BigButton onClick={save} disabled={selected.length < 2}>
           <NextLabel />
         </BigButton>
-        <SkipForNow step={step} />
       </Actions>
     </>
   );

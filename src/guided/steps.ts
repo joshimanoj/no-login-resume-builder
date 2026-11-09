@@ -25,8 +25,8 @@ export type Step =
       autoComplete?: string;
       /** Label for an alternative answer button, and the value it sets. */
       alt?: { label: string; value: string };
-      /** Label for a skip link; skipping clears the value. */
-      skip?: string;
+      /** May be left empty (marked "Optional"; Next works with it empty). */
+      optional?: boolean;
       validate?: (value: string) => string | null;
       onDone?: (s: S) => S;
       get: Get<string>;
@@ -38,7 +38,8 @@ export type Step =
       hint?: string;
       options: string[];
       allowOther?: boolean;
-      skip?: { label: string; apply: (s: S) => S };
+      /** An extra answer meaning "none" (e.g. "I don't have marks yet"), shown with the options. */
+      none?: { label: string; apply: (s: S) => S };
       get: Get<string>;
       set: Set<string>;
     })
@@ -48,7 +49,8 @@ export type Step =
       q: string;
       hint?: string;
       noFuture?: boolean;
-      skip?: string;
+      /** May be left empty (marked "Optional"). */
+      optional?: boolean;
       get: Get<string>;
       set: Set<string>;
     })
@@ -229,7 +231,7 @@ function educationSteps(s: S): Step[] {
       get: () => (item.scoreType === "percentage" ? "Percentage" : item.scoreType === "gpa" ? "GPA (out of 10)" : ""),
       set: (st, v) => setItem(st, sec, i, { scoreType: v === "Percentage" ? "percentage" : "gpa" }),
       // Marks are required, except for a degree she's still in: a 1st-year student has none yet.
-      skip:
+      none:
         item.current && !school
           ? { label: "I don't have marks yet", apply: (st) => setItem(st, sec, i, { scoreType: undefined, gpa: "" }) }
           : undefined,
@@ -301,7 +303,7 @@ function projectSteps(s: S): Step[] {
         get: () => str(item.name), set: (st, v) => setItem(st, sec, i, { name: v }),
       },
       {
-        kind: "month", key: `${k}.date`, section: sec, q: "When was it?", skip: "Skip",
+        kind: "month", key: `${k}.date`, section: sec, q: "When was it?", optional: true,
         get: () => toMonth(str(item.date)), set: (st, v) => setItem(st, sec, i, { date: fromMonth(v) }),
       },
       { kind: "tools", key: `${k}.tools`, section: sec, index: i },
@@ -320,7 +322,7 @@ function achievementSteps(s: S): Step[] {
         get: () => str(item.title), set: (st, v) => setItem(st, sec, i, { title: v }),
       },
       {
-        kind: "month", key: `${k}.date`, section: sec, q: "When?", skip: "Skip",
+        kind: "month", key: `${k}.date`, section: sec, q: "When?", optional: true,
         get: () => toMonth(str(item.date)), set: (st, v) => setItem(st, sec, i, { date: fromMonth(v) }),
       },
       { kind: "describe", key: `${k}.about`, section: sec, index: i },
@@ -388,13 +390,13 @@ function certificationSteps(s: S): Step[] {
       });
     }
     steps.push({
-      kind: "text", key: `${k}.credential`, section: sec, q: "Certificate ID or number", hint: "Optional. It helps employers check it.",
-      skip: "Skip", get: () => str(item.credentialId), set: (st, v) => setItem(st, sec, i, { credentialId: v.trim() }),
+      kind: "text", key: `${k}.credential`, section: sec, q: "Certificate ID or number", hint: "It helps employers check it.",
+      optional: true, get: () => str(item.credentialId), set: (st, v) => setItem(st, sec, i, { credentialId: v.trim() }),
     });
     // Optional, as in the original builder ("Description (Optional)"): shown under the certificate by every template.
     steps.push({
-      kind: "text", key: `${k}.description`, section: sec, q: "What did it cover?", multiline: true, skip: "Skip",
-      hint: "Optional. One line in your own words. Example: Python basics, data types and simple programs.",
+      kind: "text", key: `${k}.description`, section: sec, q: "What did it cover?", multiline: true, optional: true,
+      hint: "One line in your own words. Example: Python basics, data types and simple programs.",
       get: () => htmlToParagraph(str(item.description)),
       set: (st, v) => setItem(st, sec, i, { description: paragraphToHtml(sentence(v)) }),
     });
@@ -424,7 +426,7 @@ function publicationSteps(s: S): Step[] {
         alt: { label: "Only me", value: "" }, get: () => str(item.authors), set: (st, v) => setItem(st, sec, i, { authors: v }),
       },
       {
-        kind: "text", key: `${k}.link`, section: sec, q: "Link to it", inputType: "url", placeholder: "https://doi.org/...", skip: "Skip",
+        kind: "text", key: `${k}.link`, section: sec, q: "Link to it", inputType: "url", placeholder: "https://doi.org/...", optional: true,
         validate: linkValidator, get: () => str(item.link), set: (st, v) => setItem(st, sec, i, { link: v.trim() }),
       },
     ];

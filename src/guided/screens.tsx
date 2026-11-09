@@ -269,15 +269,15 @@ export function YourCv() {
   const download = () => navigate("/download");
   const edit = () => setEditing(true);
   // The main button follows where she is.
-  const mainAction = (): { label: string; onClick: () => void; tone?: "green" } | null => {
+  // The buttons below stay the same in every state; only this main one changes.
+  const mainAction = (): { label: string; onClick: () => void; tone?: "green"; disabled?: boolean } | null => {
     if (reviewing) return null;
     if (acceptedNow) return downloadReady ? { label: "Download my CV", onClick: download, tone: "green" } : null;
     if (failing) return { label: `Finish ${failing.label}`, onClick: () => goStep(firstStepOfSection(state, failing.id)) };
     if (left <= 0) return null;
     if (!latest) return { label: "Submit to Curie for review", onClick: () => navigate("/submit"), tone: "green" };
     // Reviewed and nothing changed yet: submitting the same CV would only use up an attempt.
-    if (latest.review && !changed) return { label: "Edit my CV", onClick: edit };
-    return { label: "Submit again", onClick: () => navigate("/submit"), tone: "green" };
+    return { label: "Submit again", onClick: () => navigate("/submit"), tone: "green", disabled: Boolean(latest.review) && !changed };
   };
   const main = mainAction();
 
@@ -318,16 +318,16 @@ export function YourCv() {
             <Hint className="text-center">Change your CV using Curie's feedback, then submit again.</Hint>
           )}
           {main && (
-            <BigButton tone={main.tone} onClick={main.onClick}>
+            <BigButton tone={main.tone} onClick={main.onClick} disabled={main.disabled}>
               {main.label}
             </BigButton>
           )}
           {/* Always a tap away: editing, the look, and the download (when it isn't the main button). */}
           {!reviewing && (
             <div className="flex gap-2 [&>*]:flex-1">
-              {main?.onClick !== edit && <SmallAction icon={PenLine} label="Edit my CV" onClick={edit} />}
+              <SmallAction icon={PenLine} label="Edit my CV" onClick={edit} />
               <SmallAction icon={LayoutTemplate} label="Change look" onClick={() => navigate("/look")} />
-              {main?.onClick !== download && <SmallAction icon={FileDown} label="Download" onClick={download} disabled={!downloadReady} />}
+              <SmallAction icon={FileDown} label="Download" onClick={download} disabled={!downloadReady} />
             </div>
           )}
           {!downloadReady && !reviewing && <Hint className="text-center">Add the required details to download your CV.</Hint>}

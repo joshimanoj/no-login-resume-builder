@@ -493,7 +493,7 @@ test("after a review, 'Edit my CV' goes back into the questions, and she can sub
   await tap(page, "Submit to Curie");
   await expect(page.getByText("Needs another attempt")).toBeVisible({ timeout: 15_000 });
   // Nothing changed yet: the review leads to editing, not to submitting the same CV again.
-  await expect(page.getByRole("button", { name: "Submit again" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Submit again" })).toBeDisabled();
   await tap(page, "Edit my CV");
   // She picks the part to change; Curie's flagged sections come first and are marked.
   const picker = page.getByRole("dialog");
@@ -556,4 +556,27 @@ test("on a question, Back is at the bottom next to Next (none on the first quest
   await page.goto("/s/personal.hasLinkedin");
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page).toHaveURL(/\/s\/personal\.location$/);
+});
+
+test("no 'Skip for now': required questions need an answer, optional ones say so beside the box and can be left empty", async ({ page }) => {
+  await page.goto("/demo");
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/s/personal.email");
+  await expect(page.getByRole("button", { name: /Skip/ })).toHaveCount(0);
+  await page.getByRole("textbox").fill("");
+  await expect(page.getByRole("button", { name: "Next", exact: true })).toBeDisabled();
+
+  // Optional: certificate ID
+  await page.goto("/s/certifications.0.credential");
+  await expect(page.getByText("Optional · leave it empty if you don't have one")).toBeVisible();
+  await page.getByRole("textbox").fill("");
+  await next(page);
+  await expect(page).toHaveURL(/\/s\/certifications\.0\.description$/);
+
+  // Optional date: project
+  await page.goto("/s/projects.0.date");
+  await page.getByRole("combobox", { name: "Month" }).selectOption("");
+  await page.getByRole("textbox", { name: "Year" }).fill("");
+  await next(page);
+  await expect(page).toHaveURL(/\/s\/projects\.0\.tools$/);
 });
