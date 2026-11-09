@@ -32,7 +32,7 @@ import {
 import { buildSteps, editStartStep, firstStepOfSection } from "./steps";
 import { allSectionsPass, firstFailingSection, sectionIssues } from "./checks";
 import { createSubmission, fetchReview, requestReview, signInWithGoogle, usingMock } from "./backend";
-import { ResubmitBar, SectionsList, SectionsMenu } from "./sections";
+import { EditCvSheet, ResubmitBar, SectionsList, SectionsMenu } from "./sections";
 import { SectionOverview } from "./overview";
 import { Actions, BigButton, CurieAvatar, Hint, LinkButton, Question, Screen, Spacer, Stars } from "./ui";
 
@@ -256,6 +256,7 @@ export function YourCv() {
   const rejected = latest?.review?.verdict === "rejected";
   // Download follows the original builder's rules: the required details, nothing more. No sign-in or review needed.
   const downloadReady = canDownload(state.data);
+  const [editing, setEditing] = useState(false);
 
   return (
     <Screen title="Your CV" back={false} wide>
@@ -270,9 +271,10 @@ export function YourCv() {
           <SecondaryButton icon={LayoutTemplate} onClick={() => navigate("/look")}>
             Change the look
           </SecondaryButton>
-          <SecondaryButton icon={PenLine} onClick={() => goStep(editStartStep(state))}>
+          <SecondaryButton icon={PenLine} onClick={() => setEditing(true)}>
             Edit my CV
           </SecondaryButton>
+          <EditCvSheet open={editing} onOpenChange={setEditing} />
           {rejected && (
             <SecondaryButton icon={Sparkles} className="col-span-2" onClick={() => navigate("/review")}>
               See Curie's review
@@ -525,11 +527,13 @@ function usePollReview() {
 
 export function ReviewScreen() {
   usePollReview();
-  const { state, goStep } = useGuided();
+  const { state } = useGuided();
   const navigate = useNavigate();
   const latest = latestSubmission(state);
-  // Back into the questions, starting at the first section Curie asked to improve.
-  const editCv = () => goStep(editStartStep(state));
+  // She picks the section to change (Curie's flagged ones first).
+  const [editing, setEditing] = useState(false);
+  const editCv = () => setEditing(true);
+  const editSheet = <EditCvSheet open={editing} onOpenChange={setEditing} />;
   if (!latest) return <Navigate to="/cv" replace />;
 
   if (!latest.review) {
@@ -579,6 +583,7 @@ export function ReviewScreen() {
           Choose a look
         </LinkButton>
         <LinkButton onClick={editCv}>Edit my CV</LinkButton>
+        {editSheet}
         <Actions>
           <BigButton tone="green" onClick={() => navigate("/download")}>
             Download my CV
@@ -607,6 +612,7 @@ export function ReviewScreen() {
       </div>
       <SectionFeedbackList submission={latest} />
       <AttemptHistory />
+      {editSheet}
       <Actions>
         <div>
           {left <= 0 ? (

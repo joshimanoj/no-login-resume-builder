@@ -17,10 +17,13 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { SectionOverview } from "./overview";
 import { entryOf, itemLabel, sectionAnswers } from "./answers";
-import { buildSteps, isListSection, isPassedOver, items, type Step } from "./steps";
+import { buildSteps, firstStepOfSection, isListSection, isPassedOver, items, type Step } from "./steps";
 import { useGuided } from "./GuidedContext";
-import { SECTIONS, attemptsLeft, changedSinceReview, isUnderReview, latestSubmission, sectionDef, sectionNumber, type SectionId } from "./state";
+import { SECTIONS, attemptsLeft, changedSinceReview, flaggedSections, isUnderReview, latestSubmission, sectionDef, sectionNumber, type SectionId } from "./state";
 import { STATUS_TEXT, sectionStatus, type SectionStatus } from "./checks";
+
+/** The bottom sheets here: tall enough for every section, white even under the app's dark theme. */
+const SHEET = "max-h-[85dvh] overflow-y-auto rounded-t-2xl border-none bg-white text-slate-800 md:mx-auto md:max-w-lg";
 
 export const SECTION_ICONS: Record<SectionId, LucideIcon> = {
   personal: User,
@@ -45,12 +48,25 @@ export function useOpenSection() {
 }
 
 /** All 9 sections with their status. Used in the sections menu and on the home page. */
-export function SectionsList({ current, onOpen }: { current?: SectionId; onOpen?: () => void }) {
-  const { state } = useGuided();
-  const open = useOpenSection();
+export function SectionsList({
+  current,
+  onOpen,
+  editing = false,
+}: {
+  current?: SectionId;
+  onOpen?: () => void;
+  /** Editing after a review: sections Curie flagged first and marked, and each opens its questions. */
+  editing?: boolean;
+}) {
+  const { state, goStep } = useGuided();
+  const openSection = useOpenSection();
+  const flagged = new Set(editing ? flaggedSections(state) : []);
+  const ordered = editing ? [...SECTIONS].sort((a, b) => Number(flagged.has(b.id)) - Number(flagged.has(a.id))) : SECTIONS;
+  const open = (id: SectionId, status: SectionStatus) => (editing ? goStep(firstStepOfSection(state, id)) : openSection(id, status));
   return (
     <ul className="divide-y divide-slate-100">
-      {SECTIONS.map((d, k) => {
+      {ordered.map((d) => {
+        const k = SECTIONS.indexOf(d);
         const status = sectionStatus(state, d.id);
         const Icon = SECTION_ICONS[d.id];
         return (
@@ -68,10 +84,14 @@ export function SectionsList({ current, onOpen }: { current?: SectionId; onOpen?
               <span className="flex-1 text-[15px]">
                 {k + 1}. {d.label}
               </span>
-              <span className={`text-xs ${status === "done" ? "text-[#3b6d11]" : status === "needs" ? "text-[#854F0B]" : "text-slate-400"}`}>
-                {status === "done" ? "✓ " : status === "needs" ? "! " : ""}
-                {STATUS_TEXT[status]}
-              </span>
+              {flagged.has(d.id) ? (
+                <span className="rounded-md bg-[#fdf3e1] px-2 py-0.5 text-xs font-medium text-[#854F0B]">Curie: needs work</span>
+              ) : (
+                <span className={`text-xs ${status === "done" ? "text-[#3b6d11]" : status === "needs" ? "text-[#854F0B]" : "text-slate-400"}`}>
+                  {status === "done" ? "✓ " : status === "needs" ? "! " : ""}
+                  {STATUS_TEXT[status]}
+                </span>
+              )}
             </button>
           </li>
         );
@@ -119,7 +139,7 @@ export function SectionsMenu({ current, showAnswers = true }: { current: Section
         All sections <ChevronDown className="h-3.5 w-3.5" aria-hidden />
       </button>
       <Sheet open={open !== null} onOpenChange={(o) => !o && setOpen(null)}>
-        <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-2xl border-none bg-white text-slate-800 md:mx-auto md:max-w-lg">
+        <SheetContent side="bottom" className={SHEET}>
           {open === "answers" ? (
             <>
               <AnswersSheetBody section={current} />
@@ -192,7 +212,7 @@ export function SoFar({ step }: { step: Step }) {
           See all <ChevronRight className="h-4 w-4" aria-hidden />
         </span>
       </button>
-      <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-2xl border-none bg-white text-slate-800 md:mx-auto md:max-w-lg">
+      <SheetContent side="bottom" className={SHEET}>
         <AnswersSheetBody section={step.section} />
       </SheetContent>
     </Sheet>
@@ -229,5 +249,22 @@ export function CurieNote({ section }: { section: SectionId }) {
       <span className="font-medium">Curie said: </span>
       {feedback.comment}
     </p>
+  );
+}
+
+/** "Edit my CV": she picks the part to change, and goes through its questions with her answers filled in. */
+export function EditCvSheet({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className={SHEET}>
+        <SheetHeader>
+          <SheetTitle>Which part do you want to change?</SheetTitle>
+        </SheetHeader>
+        <p className="mt-1 text-sm text-slate-500">Tap a section to go through its questions. Your answers are already filled in.</p>
+        <div className="mt-3">
+          <SectionsList editing onOpen={() => onOpenChange(false)} />
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }

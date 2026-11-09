@@ -485,7 +485,13 @@ test("after a review, 'Edit my CV' goes back into the questions, and she can sub
   // Nothing changed yet: the review leads to editing, not to submitting the same CV again.
   await expect(page.getByRole("button", { name: "Submit again" })).toHaveCount(0);
   await tap(page, "Edit my CV");
-  // Starts at the section Curie asked to improve, in the same question-by-question journey.
+  // She picks the part to change; Curie's flagged sections come first and are marked.
+  const picker = page.getByRole("dialog");
+  await expect(picker.getByRole("heading", { name: "Which part do you want to change?" })).toBeVisible();
+  await expect(picker.getByRole("button").first()).toContainText("Projects");
+  await expect(picker.getByRole("button").first()).toContainText("Curie: needs work");
+  await picker.getByRole("button", { name: /Projects/ }).click();
+  // The same question-by-question journey, with her answers filled in.
   await expect(page).toHaveURL(/\/s\/projects\.intro$/);
   await expect(page.getByText(/Curie said:.*Add more detail/)).toBeVisible();
   await expect(page.getByText("You've made changes since Curie's review.")).toHaveCount(0);
@@ -496,7 +502,9 @@ test("after a review, 'Edit my CV' goes back into the questions, and she can sub
   await expect(page.getByText("You've made changes since Curie's review.")).toBeVisible();
   // The review now offers to send the changes, with more editing a tap away.
   await page.goto("/review");
-  await expect(page.getByRole("button", { name: "Keep editing my CV" })).toBeVisible();
+  await tap(page, "Keep editing my CV");
+  await expect(page.getByRole("heading", { name: "Which part do you want to change?" })).toBeVisible();
+  await page.keyboard.press("Escape");
   await tap(page, "Submit again");
   await expect(page.getByText("This is attempt 2 of 10.", { exact: false })).toBeVisible();
 });

@@ -178,6 +178,11 @@ export const changedSinceReview = (s: GuidedState) => {
   const latest = latestSubmission(s);
   return Boolean(latest?.review) && !unchangedSinceSubmit(s, latest!);
 };
+/** Sections Curie asked her to improve in her latest review (none once accepted). */
+export const flaggedSections = (s: GuidedState): SectionId[] => {
+  const review = latestSubmission(s)?.review;
+  return review && review.verdict !== "accepted" ? review.sections.filter((f) => f.status === "needs_work").map((f) => f.id) : [];
+};
 export const isAccepted = (s: GuidedState) => latestSubmission(s)?.review?.verdict === "accepted";
 export const attemptsLeft = (s: GuidedState) => MAX_ATTEMPTS - s.submissions.length;
 /** Accepted, and not edited since the accepted submission. Download needs this. */

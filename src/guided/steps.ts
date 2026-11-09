@@ -1,6 +1,6 @@
 import { toTitleCase, type ResumeData } from "@/utils/resumeRules";
 import { htmlToParagraph, paragraphToHtml, sentence } from "@/utils/plainText";
-import { SECTIONS, latestSubmission, newId, type GuidedState, type ListSection, type SectionId } from "./state";
+import { SECTIONS, flaggedSections, newId, type GuidedState, type ListSection, type SectionId } from "./state";
 
 type S = GuidedState;
 type Get<T> = (s: S) => T;
@@ -489,6 +489,6 @@ export const firstStepOfItem = (s: S, id: SectionId, index: number) =>
 
 /** Where "Edit my CV" goes back into the questions: the first section Curie asked her to improve, else the start. */
 export const editStartStep = (s: S) => {
-  const flagged = latestSubmission(s)?.review?.sections.find((f) => f.status === "needs_work");
-  return flagged ? firstStepOfSection(s, flagged.id) : buildSteps(s)[0].key;
+  const [flagged] = flaggedSections(s);
+  return flagged ? firstStepOfSection(s, flagged) : buildSteps(s)[0].key;
 };
