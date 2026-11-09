@@ -1,6 +1,6 @@
 import { toTitleCase, type ResumeData } from "@/utils/resumeRules";
 import { htmlToParagraph, paragraphToHtml, sentence } from "@/utils/plainText";
-import { SECTIONS, newId, type GuidedState, type ListSection, type SectionId } from "./state";
+import { SECTIONS, latestSubmission, newId, type GuidedState, type ListSection, type SectionId } from "./state";
 
 type S = GuidedState;
 type Get<T> = (s: S) => T;
@@ -486,3 +486,9 @@ export const isPassedOver = (st: Step, s: S) => Boolean(st.skipWhenAnswered) && 
 /** The first question of item `index` in a list section, passing over ones already answered (falls back to the section intro). */
 export const firstStepOfItem = (s: S, id: SectionId, index: number) =>
   buildSteps(s).find((st) => st.key.startsWith(`${id}.${index}.`) && !isPassedOver(st, s))?.key ?? `${id}.intro`;
+
+/** Where "Edit my CV" goes back into the questions: the first section Curie asked her to improve, else the start. */
+export const editStartStep = (s: S) => {
+  const flagged = latestSubmission(s)?.review?.sections.find((f) => f.status === "needs_work");
+  return flagged ? firstStepOfSection(s, flagged.id) : buildSteps(s)[0].key;
+};

@@ -19,7 +19,7 @@ import { SectionOverview } from "./overview";
 import { entryOf, itemLabel, sectionAnswers } from "./answers";
 import { buildSteps, isListSection, isPassedOver, items, type Step } from "./steps";
 import { useGuided } from "./GuidedContext";
-import { SECTIONS, sectionDef, sectionNumber, type SectionId } from "./state";
+import { SECTIONS, attemptsLeft, changedSinceReview, isUnderReview, latestSubmission, sectionDef, sectionNumber, type SectionId } from "./state";
 import { STATUS_TEXT, sectionStatus, type SectionStatus } from "./checks";
 
 export const SECTION_ICONS: Record<SectionId, LucideIcon> = {
@@ -154,7 +154,7 @@ function AnswersSheetBody({ section }: { section: SectionId }) {
 }
 
 /** Short answers that read well in one line (not yes/no, not long descriptions). */
-const glanceable = (v: string) => v !== "" && v !== "Yes" && v !== "No" && !v.includes("\n") && v.length <= 40;
+const glanceable = (v: string) => v !== "" && v !== "Yes" && v !== "No" && !v.startsWith("•") && !v.includes("\n") && v.length <= 40;
 
 /**
  * Above each question: what she has entered so far for this entry (or, starting a new one, the entries
@@ -196,5 +196,38 @@ export function SoFar({ step }: { step: Step }) {
         <AnswersSheetBody section={step.section} />
       </SheetContent>
     </Sheet>
+  );
+}
+
+/** After a review, as soon as she changes something: submit again from wherever she is. */
+export function ResubmitBar() {
+  const { state } = useGuided();
+  const navigate = useNavigate();
+  if (!changedSinceReview(state) || isUnderReview(state) || attemptsLeft(state) <= 0) return null;
+  return (
+    <div className="mb-3 flex items-center gap-2 rounded-lg bg-[#eaf5e4] px-3 py-2 text-sm text-[#1f3d12]">
+      <span className="min-w-0 flex-1">You've made changes since Curie's review.</span>
+      <button
+        type="button"
+        onClick={() => navigate("/submit")}
+        className="flex min-h-9 shrink-0 items-center gap-0.5 rounded-full bg-secondary px-3 text-sm font-medium text-white"
+      >
+        Submit again <ChevronRight className="h-4 w-4" aria-hidden />
+      </button>
+    </div>
+  );
+}
+
+/** While she reworks a section Curie asked her to improve: what Curie said, kept in view. */
+export function CurieNote({ section }: { section: SectionId }) {
+  const { state } = useGuided();
+  const latest = latestSubmission(state);
+  const feedback = latest?.review?.verdict !== "accepted" ? latest?.review?.sections.find((f) => f.id === section && f.status === "needs_work") : undefined;
+  if (!feedback || isUnderReview(state)) return null;
+  return (
+    <p className="mb-3 rounded-lg bg-[#fdf3e1] px-3 py-2 text-sm text-[#633806]">
+      <span className="font-medium">Curie said: </span>
+      {feedback.comment}
+    </p>
   );
 }

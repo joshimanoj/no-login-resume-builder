@@ -23,7 +23,7 @@ import {
 } from "./steps";
 import { sectionIssues } from "./checks";
 import { CvPreview } from "./screens";
-import { SECTION_ICONS, SectionsMenu, SoFar } from "./sections";
+import { CurieNote, ResubmitBar, SECTION_ICONS, SectionsMenu, SoFar } from "./sections";
 import { PAGE_WIDTH } from "@/components/ScaledPreview";
 import { EXAMPLE_CV } from "./demo";
 import { paragraphToHtml } from "@/utils/plainText";
@@ -98,6 +98,8 @@ function TrackedStep({ step, bar, label }: { step: Step; bar: { total: number; c
   }, [editing, step.key, update]);
   return (
     <Screen sections={bar} label={label} onBack={onBack} aside={<LivePreview />} headerAction={<MyCvButton />}>
+      <ResubmitBar />
+      <CurieNote section={step.section} />
       {/* What she has entered so far, kept in view; not when changing one answer from an overview. */}
       {!editing && step.kind !== "intro" && step.kind !== "more" && step.kind !== "check" && <SoFar key={`so-far-${step.key}`} step={step} />}
       {/* key forces fresh local state per step */}
@@ -1108,6 +1110,8 @@ function CheckStep({ step }: { step: StepOf<"check"> }) {
   const navigate = useNavigate();
   const issues = sectionIssues(state, step.section);
   const nextSection = SECTIONS[sectionNumber(step.section)];
+  // Once she has submitted, the last section leads back to her CV (to submit again), not to choosing a look.
+  const submitted = state.submissions.length > 0;
 
   const fix = (target: string, preset?: Record<string, unknown>) => {
     if (preset) {
@@ -1140,8 +1144,8 @@ function CheckStep({ step }: { step: StepOf<"check"> }) {
       {issues.length > 0 && <Hint>You'll need to fix this before you submit your CV to Curie.</Hint>}
       <CvPeek />
       <Actions>
-        <BigButton tone={issues.length ? "outline" : "primary"} onClick={() => (nextSection ? advance(state, step.key) : navigate("/look"))}>
-          {`${issues.length ? "Fix later, continue" : "Continue"} to ${nextSection ? nextSection.label : "choose a look"}`}
+        <BigButton tone={issues.length ? "outline" : "primary"} onClick={() => (nextSection ? advance(state, step.key) : navigate(submitted ? "/cv" : "/look"))}>
+          {`${issues.length ? "Fix later, continue" : "Continue"} to ${nextSection ? nextSection.label : submitted ? "my CV" : "choose a look"}`}
         </BigButton>
       </Actions>
     </>

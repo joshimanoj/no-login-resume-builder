@@ -28,10 +28,10 @@ import {
   type SectionId,
   type Submission,
 } from "./state";
-import { buildSteps, firstStepOfSection } from "./steps";
+import { buildSteps, editStartStep, firstStepOfSection } from "./steps";
 import { allSectionsPass, firstFailingSection, sectionIssues } from "./checks";
 import { createSubmission, fetchReview, requestReview, signInWithGoogle, usingMock } from "./backend";
-import { SectionsList, SectionsMenu } from "./sections";
+import { ResubmitBar, SectionsList, SectionsMenu } from "./sections";
 import { SectionOverview } from "./overview";
 import { Actions, BigButton, CurieAvatar, Hint, LinkButton, Question, Screen, Spacer, Stars } from "./ui";
 
@@ -269,8 +269,8 @@ export function YourCv() {
           <SecondaryButton icon={LayoutTemplate} onClick={() => navigate("/look")}>
             Change the look
           </SecondaryButton>
-          <SecondaryButton icon={PenLine} onClick={() => navigate("/edit")}>
-            Edit everything
+          <SecondaryButton icon={PenLine} onClick={() => goStep(editStartStep(state))}>
+            Edit my CV
           </SecondaryButton>
           {rejected && (
             <SecondaryButton icon={Sparkles} className="col-span-2" onClick={() => navigate("/review")}>
@@ -347,21 +347,11 @@ function Banner({ tone, children }: { tone: "info" | "good" | "warn"; children: 
 
 // ---------- edit everything ----------
 
+/** /edit: editing her CV is the same journey through the questions, starting where Curie asked for changes. */
 export function EditEverything() {
   const { state } = useGuided();
-  const navigate = useNavigate();
   if (isUnderReview(state)) return <Navigate to="/cv" replace />;
-  return (
-    <Screen title="Edit everything">
-      <Hint>Every part of your CV. Tap a section to change, add, or delete anything.</Hint>
-      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-1">
-        <SectionsList />
-      </div>
-      <Actions>
-        <BigButton onClick={() => navigate("/cv")}>Back to my CV</BigButton>
-      </Actions>
-    </Screen>
-  );
+  return <Navigate to={stepPath(editStartStep(state))} replace />;
 }
 
 const sectionParam = (raw?: string): SectionId | null => (SECTIONS.some((d) => d.id === raw) ? (raw as SectionId) : null);
@@ -380,6 +370,7 @@ export function EditSection() {
   const done = () => (resume ? goStep(resume) : navigate("/cv"));
   return (
     <Screen title="Review and edit" label={<SectionsMenu current={section} showAnswers={false} />} wide>
+      <ResubmitBar />
       <Hint>Tap anything to change it.</Hint>
       {issues.map((i) => (
         <Banner key={i.message} tone="warn">

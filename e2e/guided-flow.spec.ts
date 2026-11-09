@@ -474,3 +474,26 @@ test("a course or certificate can have an optional description, as in the origin
   await page.goto("/cv");
   await expect(page.locator("text=Python basics, data types and simple programs.").first()).toBeVisible();
 });
+
+test("after a review, 'Edit my CV' goes back into the questions, and she can submit again from any question once she changes something", async ({ page }) => {
+  await page.goto("/demo?to=cv");
+  await expect(page).toHaveURL(/\/cv$/);
+  await tap(page, "Submit to Curie for review");
+  await page.getByRole("button", { name: /Continue with Google/ }).click();
+  await tap(page, "Submit to Curie");
+  await expect(page.getByText("Needs another attempt")).toBeVisible({ timeout: 15_000 });
+
+  await page.goto("/cv");
+  await tap(page, "Edit my CV");
+  // Starts at the section Curie asked to improve, in the same question-by-question journey.
+  await expect(page).toHaveURL(/\/s\/projects\.intro$/);
+  await expect(page.getByText(/Curie said:.*Add more detail/)).toBeVisible();
+  await expect(page.getByText("You've made changes since Curie's review.")).toHaveCount(0);
+
+  await page.goto("/s/projects.0.name");
+  await page.getByRole("textbox").fill("College fest website for 300 students");
+  await next(page);
+  await expect(page.getByText("You've made changes since Curie's review.")).toBeVisible();
+  await tap(page, "Submit again");
+  await expect(page.getByText("This is attempt 2 of 10.", { exact: false })).toBeVisible();
+});

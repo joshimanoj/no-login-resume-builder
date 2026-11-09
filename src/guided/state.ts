@@ -171,12 +171,19 @@ export const isUnderReview = (s: GuidedState) => {
   const latest = latestSubmission(s);
   return Boolean(latest && !latest.review);
 };
+/** Her CV is exactly as she last submitted it. */
+const unchangedSinceSubmit = (s: GuidedState, latest: Submission) => JSON.stringify(latest.snapshot) === JSON.stringify(s.data);
+/** She has a review back and has changed her CV since that attempt: she can submit again. */
+export const changedSinceReview = (s: GuidedState) => {
+  const latest = latestSubmission(s);
+  return Boolean(latest?.review) && !unchangedSinceSubmit(s, latest!);
+};
 export const isAccepted = (s: GuidedState) => latestSubmission(s)?.review?.verdict === "accepted";
 export const attemptsLeft = (s: GuidedState) => MAX_ATTEMPTS - s.submissions.length;
 /** Accepted, and not edited since the accepted submission. Download needs this. */
 export const isAcceptedAndUnchanged = (s: GuidedState) => {
   const latest = latestSubmission(s);
-  return latest?.review?.verdict === "accepted" && JSON.stringify(latest.snapshot) === JSON.stringify(s.data);
+  return latest?.review?.verdict === "accepted" && unchangedSinceSubmit(s, latest);
 };
 
 const STORAGE_KEY = "guided-cv-v1";

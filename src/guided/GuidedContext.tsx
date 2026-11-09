@@ -152,8 +152,8 @@ export function GuidedProvider({ children }: { children: ReactNode }) {
         else returnTo(navigate, back);
         return;
       }
-      // After the last section comes the last step: choosing a look.
-      navigate(following ? stepPath(following.key) : "/look");
+      // After the last section comes the last step, choosing a look; once she has submitted, her CV (to submit again).
+      navigate(following ? stepPath(following.key) : next.submissions.length ? "/cv" : "/look");
     },
     [location.search, navigate, update],
   );
