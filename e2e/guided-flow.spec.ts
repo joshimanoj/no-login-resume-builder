@@ -252,7 +252,7 @@ test("a section's edit screen shows every answer in the new style; each opens it
   await page.goto("/edit/personal");
   await expect(page.getByRole("button", { name: /Professional summary.*I am a 3rd-year B\.Sc\. Physics student/ })).toBeVisible();
   await page.getByRole("button", { name: /Phone/ }).click();
-  await tap(page, "Cancel");
+  await tap(page, "Back");
   await expect(page).toHaveURL(/\/edit\/personal$/);
 });
 
@@ -535,4 +535,25 @@ test("after submitting, signing out from her CV clears this phone for the next s
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole("button", { name: "Let's start without signing in" })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("guided-cv-v1") ?? "")).not.toContain("Asha");
+});
+
+test("on a question, Back is at the bottom next to Next (none on the first question)", async ({ page }) => {
+  await page.goto("/demo");
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/s/personal.intro");
+  await expect(page.getByRole("button", { name: "Back", exact: true })).toHaveCount(0);
+  await page.goto("/s/personal.email");
+  // Not in the top bar any more: one Back, in the bottom bar beside Next.
+  const back = page.getByRole("button", { name: "Back", exact: true });
+  await expect(back).toHaveCount(1);
+  const backBox = (await back.boundingBox())!;
+  const nextBox = (await page.getByRole("button", { name: "Next", exact: true }).boundingBox())!;
+  expect(Math.abs(backBox.y - nextBox.y)).toBeLessThan(4);
+  expect(backBox.x).toBeLessThan(nextBox.x);
+  await back.click();
+  await expect(page).toHaveURL(/\/s\/personal\.name$/);
+  // Questions that move on with a tap still have Back.
+  await page.goto("/s/personal.hasLinkedin");
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page).toHaveURL(/\/s\/personal\.location$/);
 });

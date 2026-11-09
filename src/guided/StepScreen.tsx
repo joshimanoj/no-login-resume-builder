@@ -39,10 +39,10 @@ import {
   Option,
   Question,
   Screen,
-  Spacer,
   TextArea,
   TextInput,
   hasNonLatinScript,
+  StepBackContext,
 } from "./ui";
 
 const ENGLISH_ONLY = "Please write this in English. Your CV needs to be in English.";
@@ -79,17 +79,17 @@ function TrackedStep({ step, bar, label }: { step: Step; bar: { total: number; c
   const back = backParam(useLocation().search);
   const editing = back !== null;
   // Back is the previous question in the flow, even if she came here from Home; from an overview, back to it.
+  const steps = buildSteps(state);
+  let prev = steps.findIndex((st) => st.key === step.key) - 1;
+  while (prev >= 0 && isPassedOver(steps[prev], state)) prev--;
   const onBack = () => {
     if (back) return returnTo(navigate, back);
-    const steps = buildSteps(state);
-    let i = steps.findIndex((st) => st.key === step.key) - 1;
-    while (i >= 0 && isPassedOver(steps[i], state)) i--;
     // The first question of a 2nd, 3rd... entry came from "Add another?", not from the end of the entry before.
     const entry = entryOf(step.key);
-    if (i >= 0 && entry !== step.section && entryOf(steps[i].key) !== entry && entry !== `${step.section}.0`) {
+    if (prev >= 0 && entry !== step.section && entryOf(steps[prev].key) !== entry && entry !== `${step.section}.0`) {
       return goBackTo(stepPath(`${step.section}.more`));
     }
-    goBackTo(i >= 0 ? stepPath(steps[i].key) : "/");
+    goBackTo(stepPath(steps[prev].key));
   };
   useEffect(() => {
     // Editing one answer from an overview doesn't move where "Continue" picks up.
@@ -97,13 +97,16 @@ function TrackedStep({ step, bar, label }: { step: Step; bar: { total: number; c
     window.scrollTo({ top: 0 });
   }, [editing, step.key, update]);
   return (
-    <Screen sections={bar} label={label} onBack={onBack} aside={<LivePreview />} headerAction={<MyCvButton />}>
-      <ResubmitBar />
-      <CurieNote section={step.section} />
-      {/* What she has entered so far, kept in view; not when changing one answer from an overview. */}
-      {!editing && step.kind !== "intro" && step.kind !== "more" && step.kind !== "check" && <SoFar key={`so-far-${step.key}`} step={step} />}
-      {/* key forces fresh local state per step */}
-      <StepBody key={step.key} step={step} />
+    // Back sits at the bottom next to Next (easier to reach on a phone); none on the very first question.
+    <Screen sections={bar} label={label} back={false} aside={<LivePreview />} headerAction={<MyCvButton />}>
+      <StepBackContext.Provider value={editing || prev >= 0 ? onBack : null}>
+        <ResubmitBar />
+        <CurieNote section={step.section} />
+        {/* What she has entered so far, kept in view; not when changing one answer from an overview. */}
+        {!editing && step.kind !== "intro" && step.kind !== "more" && step.kind !== "check" && <SoFar key={`so-far-${step.key}`} step={step} />}
+        {/* key forces fresh local state per step */}
+        <StepBody key={step.key} step={step} />
+      </StepBackContext.Provider>
     </Screen>
   );
 }
@@ -359,10 +362,8 @@ type StepOf<K extends Step["kind"]> = Extract<Step, { kind: K }>;
 
 function SkipForNow({ step }: { step: Step }) {
   const { state, advance } = useGuided();
-  const navigate = useNavigate();
-  // Changing one answer from a section overview: leave without saving.
-  const back = backParam(useLocation().search);
-  if (back) return <LinkButton onClick={() => returnTo(navigate, back)}>Cancel</LinkButton>;
+  // Changing one answer from an overview: Back (beside Save) leaves without saving.
+  if (backParam(useLocation().search)) return null;
   return <LinkButton onClick={() => advance(state, step.key)}>Skip for now</LinkButton>;
 }
 
@@ -433,7 +434,7 @@ function IntroStep({ step }: { step: StepOf<"intro"> }) {
               No, skip this section
             </Option>
           </div>
-          <Spacer />
+          <Actions />
         </>
       ) : (
         <Actions>
@@ -584,7 +585,7 @@ function YesNoStep({ step }: { step: StepOf<"yesno"> }) {
           No
         </Option>
       </div>
-      <Spacer />
+      <Actions />
     </>
   );
 }
@@ -732,7 +733,7 @@ function DescribeStep({ step }: { step: StepOf<"describe"> }) {
           </div>
         ))}
         <FieldError>{error}</FieldError>
-        <Actions>
+        <Actions noBack>
           <BigButton onClick={usePrompts}>Turn these into points</BigButton>
           <LinkButton onClick={() => setHelping(false)}>Back to my points</LinkButton>
         </Actions>
@@ -894,7 +895,7 @@ function MoreStep({ step }: { step: StepOf<"more"> }) {
           {sec === "experience" ? "No, that's all" : "No, move on"}
         </Option>
       </div>
-      <Spacer />
+      <Actions />
     </>
   );
 }

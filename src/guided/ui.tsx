@@ -1,4 +1,4 @@
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
+import { createContext, forwardRef, useContext, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ChevronLeft, Check, Home, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,6 @@ export function Screen({
   label,
   back = true,
   home = true,
-  onBack,
   title,
   sections,
   wide,
@@ -28,8 +27,6 @@ export function Screen({
   back?: boolean;
   /** Home button (off on Home itself, e.g. her CV's home after submitting). */
   home?: boolean;
-  /** What Back does; by default, the previous page in history. */
-  onBack?: () => void;
   title?: string;
   /** A wider card on larger screens, for pages that show the whole CV. */
   wide?: boolean;
@@ -61,14 +58,14 @@ export function Screen({
               <button
                 type="button"
                 aria-label="Back"
-                onClick={onBack ?? (() => navigate(-1))}
+                onClick={() => navigate(-1)}
                 className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-primary active:bg-slate-100"
               >
                 <ChevronLeft className="h-6 w-6" />
               </button>
             )}
             {/* Home is on every page but Home itself, including hubs without a Back button (Your CV, the review). */}
-            {home && (back || title) && (
+            {home && (back || title || sections) && (
               <Link to="/" aria-label="Home" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-primary active:bg-slate-100">
                 <Home className="h-5 w-5" />
               </Link>
@@ -133,12 +130,37 @@ export const Spacer = () => <div className="min-h-6 flex-1" />;
  * The screen's main action. Sits at the end of the content, and sticks to the bottom
  * of the screen when the content is longer than the screen, so Next is always in reach.
  */
-export function Actions({ children }: { children: ReactNode }) {
+/** On question screens: what "Back" at the bottom does (null on the first question, or outside the questions). */
+export const StepBackContext = createContext<(() => void) | null>(null);
+
+/**
+ * The sticky bottom bar. On question screens it also has "Back", next to the main button where the
+ * thumb is, rather than in the top corner. With no buttons of its own, it shows just Back.
+ */
+export function Actions({ children, noBack = false }: { children?: ReactNode; noBack?: boolean }) {
+  const onBack = useContext(StepBackContext);
+  const back = onBack && !noBack ? (
+    <button
+      type="button"
+      onClick={onBack}
+      className="flex min-h-[52px] shrink-0 items-center justify-center gap-1 rounded-2xl border-[1.5px] border-slate-300 bg-white px-4 text-base font-medium text-primary active:bg-slate-50"
+    >
+      <ChevronLeft className="h-5 w-5" aria-hidden /> Back
+    </button>
+  ) : null;
+  if (!children && !back) return null;
   return (
     <>
       <Spacer />
       <div className="sticky bottom-0 z-10 -mx-5 border-t border-slate-100 bg-white px-5 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 md:-mx-8 md:rounded-b-2xl md:px-8 md:pb-6">
-        {children}
+        {back && children ? (
+          <div className="flex items-start gap-2.5">
+            {back}
+            <div className="min-w-0 flex-1">{children}</div>
+          </div>
+        ) : (
+          (children ?? <div className="flex flex-col [&>button]:w-full">{back}</div>)
+        )}
       </div>
     </>
   );
