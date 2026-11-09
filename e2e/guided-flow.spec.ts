@@ -96,9 +96,9 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   await expect(page.getByRole("heading", { name: "Looks good!" })).toBeVisible();
   await tap(page, "Continue to Work Experience");
 
-  // 3. Work Experience
-  await tap(page, "Yes");
-  await tap(page, "Internship");
+  // 3. Work Experience: "internship or job" is asked once, with the opening question
+  await tap(page, "Yes, an internship");
+  await expect(page.getByRole("heading", { name: "Where did you work?" })).toBeVisible();
   await answer(page, "Ankur Tech Solutions");
   await answer(page, "Web Development Intern");
   await answer(page, "Pune");
@@ -116,7 +116,8 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   await expect(page.getByRole("textbox", { name: "Point 1", exact: true })).toHaveValue("Worked with the design team.");
   await expect(page.getByRole("textbox", { name: "Point 2", exact: true })).toHaveValue("Made 5 pages of the company website.");
   await next(page);
-  await tap(page, "No, move on");
+  await expect(page.getByRole("heading", { name: "Any other internship or job?" })).toBeVisible();
+  await tap(page, "No, that's all");
   await tap(page, "Continue to Skills");
 
   // 4. Skills: tools from her answers are suggested; pick only 3 so Curie asks for more
@@ -258,10 +259,11 @@ test.describe("on a laptop", () => {
     await page.getByRole("button", { name: "Full view" }).click();
     const fullView = page.getByRole("dialog", { name: "Your CV, full view" });
     await expect(fullView).toBeVisible();
-    await expect(fullView.getByText("Your CV · Classic")).toBeVisible();
+    const lookName = fullView.locator("[aria-live=polite]");
+    await expect(lookName).toHaveText("Classic");
     await fullView.getByRole("button", { name: "Next look" }).click();
-    await expect(fullView.getByText("Your CV · Shaded Headers")).toBeVisible();
-    await fullView.getByRole("button", { name: "Back to questions" }).click();
+    await expect(lookName).toHaveText("Shaded Headers");
+    await fullView.getByRole("button", { name: "Back" }).click();
     await expect(fullView).toHaveCount(0);
     await expect(page.getByText("Your CV so far · Shaded Headers")).toBeVisible();
   });
@@ -297,7 +299,7 @@ test("on a phone, the CV opens from the top bar and peeks after each section", a
   await expect(fullView).toContainText("Web Development Intern");
   // Every look is shown as a small picture; tapping one switches to it.
   await fullView.getByRole("radio", { name: "Modern" }).click();
-  await expect(fullView.getByText("Your CV · Modern")).toBeVisible();
+  await expect(fullView.locator("[aria-live=polite]")).toHaveText("Modern");
   await expect(fullView.getByRole("button", { name: "Zoom: fit to screen" })).toBeVisible();
   await fullView.getByRole("button", { name: "Zoom in" }).click();
   await fullView.getByRole("button", { name: "Zoom in" }).click();
@@ -316,14 +318,14 @@ test("from any question she can see every section and jump to one", async ({ pag
   await page.goto("/demo");
   await expect(page).toHaveURL(/\/$/);
   await page.goto("/s/skills.pick");
-  await page.getByRole("button", { name: /Skills.*All sections/ }).click();
+  await page.getByRole("button", { name: "All sections" }).click();
   const list = page.getByRole("dialog");
   await expect(list.getByText("Your sections")).toBeVisible();
   await expect(list.getByRole("button")).toContainText(["1. Personal Information", "2. Education", "3. Work Experience"]);
   await list.getByRole("button", { name: /2\. Education/ }).click();
   await expect(page).toHaveURL(/\/edit\/education$/);
   // The section bar is on the edit screen too.
-  await expect(page.getByRole("button", { name: /Education.*All sections/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: "All sections" })).toBeVisible();
 });
 
 test("adding an entry from a section's edit screen asks the questions, then comes back", async ({ page }) => {
@@ -369,7 +371,7 @@ test("entries on the 'add another' screen open for editing", async ({ page }) =>
   await expect(page).toHaveURL(/\/$/);
   await page.goto("/s/experience.more");
   await page.getByRole("button", { name: /Research Intern/ }).click();
-  await expect(page).toHaveURL(/\/s\/experience\.1\./);
+  await expect(page).toHaveURL(/\/edit\/experience$/);
 });
 
 test("marks can be left out only for a degree she's still studying", async ({ page }) => {
@@ -384,4 +386,54 @@ test("marks can be left out only for a degree she's still studying", async ({ pa
   await page.goto("/s/education.check");
   await expect(page.getByText("Add your marks for Class 12.")).toBeVisible();
   await expect(page.getByText("Add your marks for B.Sc..")).toHaveCount(0);
+});
+
+test("a second internship or job is chosen on the 'any other' screen, not asked again", async ({ page }) => {
+  await page.goto("/demo");
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/s/experience.more");
+  await tap(page, "Add a job");
+  await expect(page).toHaveURL(/\/s\/experience\.2\.company$/);
+  await expect(page.getByRole("heading", { name: "Where did you work?" })).toBeVisible();
+  // Back from here skips the (already answered) type question.
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page).toHaveURL(/\/s\/experience\.more$/);
+});
+
+test("Back on a question goes to the previous question, even after a trip Home", async ({ page }) => {
+  await returningStudent(page);
+  await page.goto("/s/education.0.school");
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/s/education.0.school");
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page).toHaveURL(/\/s\/education\.0\.field$/);
+});
+
+test("from a question she can see her answers in the section, change one and come back to the question", async ({ page }) => {
+  await page.goto("/demo");
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/s/experience.0.about");
+  await page.getByText("Tap to see your answers").click();
+  const sheet = page.getByRole("dialog");
+  await expect(sheet.getByRole("heading", { name: "Your Work Experience so far" })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: "Delete", exact: false })).toHaveCount(0);
+  await sheet.getByRole("button", { name: /^City/ }).first().click();
+  await page.getByRole("textbox").fill("Mumbai");
+  await tap(page, "Save");
+  await expect(page).toHaveURL(/\/s\/experience\.0\.about$/);
+  await expect(page.getByRole("heading", { name: "Describe it" })).toBeVisible();
+});
+
+test("on a phone, looks are a swipeable carousel of full-size CVs", async ({ page }) => {
+  await page.goto("/demo?to=cv");
+  await expect(page).toHaveURL(/\/cv$/);
+  await page.goto("/look");
+  await expect(page.getByText("1 of 9 · swipe to see more")).toBeVisible();
+  await page.getByRole("button", { name: "Next look" }).click();
+  await expect(page.getByText("2 of 9 · swipe to see more")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Use Shaded Headers" })).toBeVisible();
+  // Swiping works too.
+  await page.locator(".snap-x").evaluate((el) => el.scrollTo({ left: 4 * el.clientWidth }));
+  await expect(page.getByText("5 of 9 · swipe to see more")).toBeVisible();
 });

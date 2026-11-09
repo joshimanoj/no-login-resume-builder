@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ChevronRight, FileDown, LayoutTemplate, MessageSquareText, PenLine, Sparkles, type LucideIcon } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileDown, LayoutTemplate, MessageSquareText, PenLine, Sparkles, type LucideIcon } from "lucide-react";
 import { ResumePreview } from "@/components/ResumePreview";
 import { PhotoCropDialog } from "@/components/PhotoCropDialog";
 import { ScaledPreview } from "@/components/ScaledPreview";
@@ -379,7 +379,7 @@ export function EditSection() {
   const resume = firstFailingSection(state) ? (steps.find((st) => st.key === state.lastStep)?.key ?? steps[0].key) : null;
   const done = () => (resume ? goStep(resume) : navigate("/cv"));
   return (
-    <Screen title="Review and edit" label={<SectionsMenu current={section} />} wide>
+    <Screen title="Review and edit" label={<SectionsMenu current={section} showAnswers={false} />} wide>
       <Hint>Tap anything to change it.</Hint>
       {issues.map((i) => (
         <Banner key={i.message} tone="warn">
@@ -728,7 +728,7 @@ export function Improve() {
   if (isUnderReview(state)) return <Navigate to="/cv" replace />;
   const issues = sectionIssues(state, section);
   return (
-    <Screen title={`Improve ${sectionDef(section).label}`} label={<SectionsMenu current={section} />} wide>
+    <Screen title={`Improve ${sectionDef(section).label}`} label={<SectionsMenu current={section} showAnswers={false} />} wide>
       <div className="sticky top-0 z-10 -mx-5 bg-white px-5 pb-2 pt-1">
         <div className="rounded-xl bg-[#fdf3e1] p-3.5 text-[15px] text-[#633806]">
           <span className="font-medium">Curie said: </span>
@@ -766,7 +766,6 @@ export function LookPicker() {
   const noPhoto = params.get("nophoto") === "1";
   const looks = TEMPLATE_IDS.filter((t) => !noPhoto || !templateSupportsPhoto(t));
   const [id, setId] = useState<TemplateId>(() => (looks.includes(state.template as TemplateId) ? (state.template as TemplateId) : looks[0]));
-  const [tab, setTab] = useState<"looks" | "preview">("looks");
   if (isUnderReview(state)) return <Navigate to="/cv" replace />;
   const cv = hasEnteredAnything(state.data) ? state.data : EXAMPLE_CV;
 
@@ -776,22 +775,11 @@ export function LookPicker() {
     else navigate("/cv");
   };
 
-  const tabClass = (on: boolean) =>
-    `min-h-10 rounded-lg text-sm font-medium ${on ? "bg-white text-primary shadow-sm" : "text-slate-600"}`;
-
   return (
     <Screen title="Choose a look" label="Last step" wide>
-      {/* Phones: the looks and the preview take turns. Larger screens show both. */}
-      <div className="mt-2 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1 md:hidden" role="tablist" aria-label="Choose a look">
-        <button type="button" role="tab" aria-selected={tab === "looks"} onClick={() => setTab("looks")} className={tabClass(tab === "looks")}>
-          Looks
-        </button>
-        <button type="button" role="tab" aria-selected={tab === "preview"} onClick={() => setTab("preview")} className={tabClass(tab === "preview")}>
-          Preview: {TEMPLATE_NAMES[id]}
-        </button>
-      </div>
-
-      <div className={tab === "looks" ? "" : "hidden md:block"}>
+      {/* Phones: one full-size look at a time, swiped like photos. Larger screens: all looks and a big preview. */}
+      <LookCarousel looks={looks} id={id} setId={setId} cv={cv} />
+      <div className="hidden md:block">
         <Hint className="mt-3">Tap a look to choose it. You can change it later.</Hint>
         <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4" role="radiogroup" aria-label="Looks">
           {looks.map((t) => (
@@ -813,7 +801,7 @@ export function LookPicker() {
         </div>
       </div>
 
-      <div className={tab === "preview" ? "mt-4" : "hidden md:mt-6 md:block"}>
+      <div className="hidden md:mt-6 md:block">
         <p className="font-medium">
           {TEMPLATE_NAMES[id]}
           {templateSupportsPhoto(id) && <span className="text-sm font-normal text-slate-500"> · has a photo</span>}
@@ -829,6 +817,72 @@ export function LookPicker() {
         </BigButton>
       </Actions>
     </Screen>
+  );
+}
+
+function LookCarousel({ looks, id, setId, cv }: { looks: TemplateId[]; id: TemplateId; setId: (t: TemplateId) => void; cv: ResumeData }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const index = Math.max(0, looks.indexOf(id));
+
+  // Open on the look she has now.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el) el.scrollLeft = index * el.clientWidth;
+    // Only on first show: afterwards her swipes move the carousel.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const onScroll = () => {
+    const el = ref.current;
+    if (!el) return;
+    const k = Math.round(el.scrollLeft / el.clientWidth);
+    if (looks[k] && looks[k] !== id) setId(looks[k]);
+  };
+  const go = (k: number) => {
+    const el = ref.current;
+    if (!el || !looks[k]) return;
+    setId(looks[k]);
+    el.scrollTo({ left: k * el.clientWidth, behavior: "smooth" });
+  };
+  const arrow = "flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-primary active:bg-slate-100 disabled:opacity-30";
+
+  return (
+    <div className="md:hidden">
+      <div className="mt-1 flex items-center gap-1">
+        <button type="button" aria-label="Previous look" disabled={index === 0} onClick={() => go(index - 1)} className={arrow}>
+          <ChevronLeft className="h-6 w-6" />
+        </button>
+        <p className="min-w-0 flex-1 text-center">
+          <span className="block truncate font-medium">
+            {TEMPLATE_NAMES[id]}
+            {templateSupportsPhoto(id) && <span className="text-sm font-normal text-slate-500"> · has a photo</span>}
+          </span>
+          <span className="block text-xs text-slate-500">
+            {index + 1} of {looks.length} · swipe to see more
+          </span>
+        </p>
+        <button type="button" aria-label="Next look" disabled={index === looks.length - 1} onClick={() => go(index + 1)} className={arrow}>
+          <ChevronRight className="h-6 w-6" />
+        </button>
+      </div>
+      <div className="flex flex-wrap justify-center" role="radiogroup" aria-label="Looks">
+        {looks.map((t, k) => (
+          <button key={t} type="button" role="radio" aria-checked={t === id} aria-label={TEMPLATE_NAMES[t]} onClick={() => go(k)} className="flex h-8 w-7 items-center justify-center">
+            <span className={`h-2 rounded-full transition-all ${t === id ? "w-5 bg-secondary" : "w-2 bg-slate-300"}`} />
+          </button>
+        ))}
+      </div>
+      <div ref={ref} onScroll={onScroll} className="-mx-5 mt-2 flex snap-x snap-mandatory overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {looks.map((t, k) => (
+          <div key={t} className="w-full shrink-0 snap-center px-5" aria-hidden={t !== id}>
+            <div className={`pointer-events-none overflow-hidden rounded-lg border-2 bg-white ${t === id ? "border-secondary" : "border-slate-200"}`}>
+              {/* Only the looks next to this one are drawn: kinder to low-end phones. */}
+              {Math.abs(k - index) <= 1 ? <CvPreview data={cv} template={t} /> : <div className="aspect-[210/297]" />}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 

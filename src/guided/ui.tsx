@@ -12,6 +12,7 @@ export function Screen({
   progress,
   label,
   back = true,
+  onBack,
   title,
   sections,
   wide,
@@ -24,6 +25,8 @@ export function Screen({
   sections?: { total: number; current: number; within: number };
   label?: ReactNode;
   back?: boolean;
+  /** What Back does; by default, the previous page in history. */
+  onBack?: () => void;
   title?: string;
   /** A wider card on larger screens, for pages that show the whole CV. */
   wide?: boolean;
@@ -55,7 +58,7 @@ export function Screen({
               <button
                 type="button"
                 aria-label="Back"
-                onClick={() => navigate(-1)}
+                onClick={onBack ?? (() => navigate(-1))}
                 className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-primary active:bg-slate-100"
               >
                 <ChevronLeft className="h-6 w-6" />

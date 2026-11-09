@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, type NavigateFunction } from "react-router-dom";
 import { clearState, hasEnteredAnything, initialState, loadState, saveState, type GuidedState } from "./state";
-import { buildSteps } from "./steps";
+import { buildSteps, isPassedOver } from "./steps";
 import { answerText, entryOf } from "./answers";
 import { pullCv, pullSubmissions, pushCv, signOut as backendSignOut, usingMock, watchUser } from "./backend";
 
@@ -17,6 +17,8 @@ interface GuidedContextValue {
   advance: (next: GuidedState, fromKey: string) => void;
   /** Open a question; with `back`, saving it returns to that page. */
   goStep: (key: string, back?: string) => void;
+  /** Go back to `path`: a step back in history when that's where she just was, so the phone's Back button stays in step. */
+  goBackTo: (path: string) => void;
   /** False until we know whether she's signed in (and her saved CV has loaded). */
   authReady: boolean;
   signOut: () => Promise<void>;
@@ -122,12 +124,27 @@ export function GuidedProvider({ children }: { children: ReactNode }) {
 
   const goStep = useCallback((key: string, back?: string) => navigate(stepPath(key, back)), [navigate]);
 
+  // The page at each history position, so Back can tell whether the page it wants is the one just before.
+  const visited = useRef<Record<number, string>>({});
+  useEffect(() => {
+    visited.current[window.history.state?.idx ?? 0] = location.pathname + location.search;
+  }, [location]);
+  const goBackTo = useCallback(
+    (path: string) => {
+      const idx = window.history.state?.idx ?? 0;
+      if (idx > 0 && visited.current[idx - 1] === path) navigate(-1);
+      else navigate(path);
+    },
+    [navigate],
+  );
+
   const advance = useCallback<GuidedContextValue["advance"]>(
     (next, fromKey) => {
       update(next);
       const steps = buildSteps(next);
-      const i = steps.findIndex((st) => st.key === fromKey);
-      const following = steps[i + 1];
+      let j = steps.findIndex((st) => st.key === fromKey) + 1;
+      while (steps[j] && isPassedOver(steps[j], next)) j++;
+      const following = steps[j];
       const back = backParam(location.search);
       if (back) {
         const opensMore = following && entryOf(following.key) === entryOf(fromKey) && !answerText(following, next);
@@ -142,7 +159,7 @@ export function GuidedProvider({ children }: { children: ReactNode }) {
   );
 
   return (
-    <GuidedContext.Provider value={{ state, update, advance, goStep, authReady, signOut }}>{children}</GuidedContext.Provider>
+    <GuidedContext.Provider value={{ state, update, advance, goStep, goBackTo, authReady, signOut }}>{children}</GuidedContext.Provider>
   );
 }
 

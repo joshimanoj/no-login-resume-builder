@@ -1,10 +1,10 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
-import { ChevronLeft, ChevronRight, FileText, Maximize2, Minimize2, Plus, ZoomIn, ZoomOut, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText, Maximize2, Plus, ZoomIn, ZoomOut, X } from "lucide-react";
 import { TEMPLATE_IDS, TEMPLATE_NAMES, templateSupportsPhoto, type TemplateId } from "@/utils/templates";
-import { backParam, returnTo, useGuided } from "./GuidedContext";
-import { itemLabel } from "./answers";
+import { backParam, returnTo, stepPath, useGuided } from "./GuidedContext";
+import { entryOf, itemLabel } from "./answers";
 import { SECTIONS, hasEnteredAnything, isUnderReview, sectionDef, sectionNumber, type GuidedState, type ListSection, type SectionId } from "./state";
 import {
   addItem,
@@ -13,6 +13,7 @@ import {
   firstStepOfItem,
   htmlToBullets,
   isListSection,
+  isPassedOver,
   items,
   optInKey,
   promptsToHtml,
@@ -73,15 +74,30 @@ function NextLabel() {
 }
 
 function TrackedStep({ step, bar, label }: { step: Step; bar: { total: number; current: number; within: number }; label: ReactNode }) {
-  const { update } = useGuided();
-  const editing = backParam(useLocation().search) !== null;
+  const { state, update, goBackTo } = useGuided();
+  const navigate = useNavigate();
+  const back = backParam(useLocation().search);
+  const editing = back !== null;
+  // Back is the previous question in the flow, even if she came here from Home; from an overview, back to it.
+  const onBack = () => {
+    if (back) return returnTo(navigate, back);
+    const steps = buildSteps(state);
+    let i = steps.findIndex((st) => st.key === step.key) - 1;
+    while (i >= 0 && isPassedOver(steps[i], state)) i--;
+    // The first question of a 2nd, 3rd... entry came from "Add another?", not from the end of the entry before.
+    const entry = entryOf(step.key);
+    if (i >= 0 && entry !== step.section && entryOf(steps[i].key) !== entry && entry !== `${step.section}.0`) {
+      return goBackTo(stepPath(`${step.section}.more`));
+    }
+    goBackTo(i >= 0 ? stepPath(steps[i].key) : "/");
+  };
   useEffect(() => {
     // Editing one answer from an overview doesn't move where "Continue" picks up.
     if (!editing) update((s) => (s.lastStep === step.key ? s : { ...s, lastStep: step.key }));
     window.scrollTo({ top: 0 });
   }, [editing, step.key, update]);
   return (
-    <Screen sections={bar} label={label} aside={<LivePreview />} headerAction={<MyCvButton />}>
+    <Screen sections={bar} label={label} onBack={onBack} aside={<LivePreview />} headerAction={<MyCvButton />}>
       {/* key forces fresh local state per step */}
       <StepBody key={step.key} step={step} />
     </Screen>
@@ -126,14 +142,16 @@ function LookStrip() {
   );
 }
 
-function LookArrows() {
+/** Previous / next look, with anything (e.g. the look's name) between them. */
+function LookArrows({ children }: { children?: ReactNode }) {
   const { stepLook } = useCvPreview();
   return (
     <>
-      <button type="button" aria-label="Previous look" onClick={() => stepLook(-1)} className="flex h-9 w-9 items-center justify-center rounded-full text-primary hover:bg-slate-100">
+      <button type="button" aria-label="Previous look" onClick={() => stepLook(-1)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-primary hover:bg-slate-100">
         <ChevronLeft className="h-5 w-5" />
       </button>
-      <button type="button" aria-label="Next look" onClick={() => stepLook(1)} className="flex h-9 w-9 items-center justify-center rounded-full text-primary hover:bg-slate-100">
+      {children}
+      <button type="button" aria-label="Next look" onClick={() => stepLook(1)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-primary hover:bg-slate-100">
         <ChevronRight className="h-5 w-5" />
       </button>
     </>
@@ -194,32 +212,34 @@ function CvFullView({ onClose }: { onClose: () => void }) {
   // Portal: the desktop side panel is sticky, which would keep this overlay underneath the card's Next button.
   return createPortal(
     <div className="fixed inset-0 z-50 flex flex-col bg-slate-200" role="dialog" aria-modal="true" aria-label="Your CV, full view">
-      <div className="flex h-14 shrink-0 items-center gap-1 border-b border-slate-300 bg-white px-3 md:px-6">
-        <p className="min-w-0 flex-1 truncate font-medium">
-          Your CV · <span className="font-normal text-slate-600">{TEMPLATE_NAMES[id]}</span>
-        </p>
-        <LookArrows />
-        <button type="button" autoFocus onClick={onClose} className="ml-1 flex h-9 items-center gap-1.5 rounded-full bg-primary px-3.5 text-sm font-medium text-white md:ml-2 md:px-4">
-          <Minimize2 className="h-4 w-4" aria-hidden />
-          <span className="hidden sm:inline">Back to questions</span>
-          <span className="sm:hidden">Back</span>
+      {/* One bar, like the other screens: Back on the left, the look in the middle, zoom on the right. */}
+      <div className="flex h-14 shrink-0 items-center gap-1 border-b border-slate-300 bg-white px-1.5 md:px-4">
+        <button type="button" autoFocus aria-label="Back" onClick={onClose} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-primary active:bg-slate-100">
+          <ChevronLeft className="h-6 w-6" />
         </button>
-      </div>
-      <div className="flex h-11 shrink-0 items-center justify-center gap-1 border-b border-slate-300 bg-white">
-        <button type="button" aria-label="Zoom out" onClick={zoomOut} disabled={zoom === null} className={zoomButton}>
-          <ZoomOut className="h-5 w-5" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setZoom(null)}
-          aria-label={zoom === null ? "Zoom: fit to screen" : `Zoom: ${Math.round(current * 100)}%. Tap to fit to screen`}
-          className="min-w-16 rounded-full px-2 py-1 text-sm font-medium tabular-nums text-slate-700 hover:bg-slate-100"
-        >
-          {zoom === null ? "Fit" : `${Math.round(current * 100)}%`}
-        </button>
-        <button type="button" aria-label="Zoom in" onClick={zoomIn} disabled={current >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]} className={zoomButton}>
-          <ZoomIn className="h-5 w-5" />
-        </button>
+        <div className="flex min-w-0 flex-1 items-center justify-center">
+          <LookArrows>
+            <span className="min-w-0 truncate text-center text-sm font-medium" aria-live="polite">
+              {TEMPLATE_NAMES[id]}
+            </span>
+          </LookArrows>
+        </div>
+        <div className="flex shrink-0 items-center">
+          <button type="button" aria-label="Zoom out" onClick={zoomOut} disabled={zoom === null} className={zoomButton}>
+            <ZoomOut className="h-5 w-5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setZoom(null)}
+            aria-label={zoom === null ? "Zoom: fit to screen" : `Zoom: ${Math.round(current * 100)}%. Tap to fit to screen`}
+            className="min-w-11 rounded-full px-1 py-1 text-xs font-medium tabular-nums text-slate-700 hover:bg-slate-100"
+          >
+            {zoom === null ? "Fit" : `${Math.round(current * 100)}%`}
+          </button>
+          <button type="button" aria-label="Zoom in" onClick={zoomIn} disabled={current >= ZOOM_LEVELS[ZOOM_LEVELS.length - 1]} className={zoomButton}>
+            <ZoomIn className="h-5 w-5" />
+          </button>
+        </div>
       </div>
       <div className="flex-1 overflow-auto px-3 py-4 md:px-6 md:py-8">
         <div ref={widthRef} className="mx-auto max-w-[794px]">
@@ -355,10 +375,12 @@ function IntroStep({ step }: { step: StepOf<"intro"> }) {
   const sec = step.section;
   const answer = state.answers[optInKey(sec)];
 
-  const start = (s: GuidedState) =>
-    isListSection(sec) && items(s, sec).length === 0 ? addItem(s, sec) : s;
+  const start = (s: GuidedState, preset?: Record<string, unknown>) =>
+    isListSection(sec) && items(s, sec).length === 0 ? addItem(s, sec, preset) : s;
 
-  const yes = () => advance(start(setAnswer(state, optInKey(sec), true)), step.key);
+  const yes = (preset?: Record<string, unknown>) => advance(start(setAnswer(state, optInKey(sec), true), preset), step.key);
+  // Work experience: "an internship or a job?" is answered here, so it isn't asked again on the next screen.
+  const firstType = sec === "experience" ? items(state, "experience")[0]?.experienceType : undefined;
   const no = () => {
     let s = setAnswer(state, optInKey(sec), false);
     if (isListSection(sec)) {
@@ -394,9 +416,20 @@ function IntroStep({ step }: { step: StepOf<"intro"> }) {
         <>
           <p className="mt-6 text-lg font-medium">{def.ask}</p>
           <div className="mt-3 space-y-2.5">
-            <Option selected={answer === true} onClick={yes} className="justify-center text-center">
-              Yes
-            </Option>
+            {sec === "experience" ? (
+              <>
+                <Option selected={answer === true && firstType === "internship"} onClick={() => yes({ experienceType: "internship" })} className="justify-center text-center">
+                  Yes, an internship
+                </Option>
+                <Option selected={answer === true && firstType === "job"} onClick={() => yes({ experienceType: "job" })} className="justify-center text-center">
+                  Yes, a job
+                </Option>
+              </>
+            ) : (
+              <Option selected={answer === true} onClick={() => yes()} className="justify-center text-center">
+                Yes
+              </Option>
+            )}
             <Option selected={answer === false} onClick={no} className="justify-center text-center">
               No, skip this section
             </Option>
@@ -807,6 +840,7 @@ function ToolsStep({ step }: { step: StepOf<"tools"> }) {
 
 function MoreStep({ step }: { step: StepOf<"more"> }) {
   const { state, advance, goStep, update } = useGuided();
+  const navigate = useNavigate();
   const sec = itemSection(step);
   const list = items(state, sec);
 
@@ -820,14 +854,16 @@ function MoreStep({ step }: { step: StepOf<"more"> }) {
 
   return (
     <>
-      <Question>{sec === "education" && schoolOptions.length ? "What's next?" : "Add another?"}</Question>
-      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">Added so far · tap one to edit it</p>
+      <Question>
+        {sec === "education" && schoolOptions.length ? "What's next?" : sec === "experience" ? "Any other internship or job?" : "Add another?"}
+      </Question>
+      <p className="mt-4 text-xs font-medium uppercase tracking-wide text-slate-500">Added so far · tap to see or change</p>
       <div className="mt-2 space-y-2">
         {list.map((it, index) => (
           <button
             key={it.id}
             type="button"
-            onClick={() => goStep(firstStepOfItem(state, sec, index))}
+            onClick={() => navigate(`/edit/${sec}`)}
             className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-slate-200 px-3.5 py-3 text-left text-[15px] active:bg-slate-50"
           >
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-secondary text-[11px] text-white">✓</span>
@@ -842,11 +878,22 @@ function MoreStep({ step }: { step: StepOf<"more"> }) {
             Add {c}
           </Option>
         ))}
-        <Option onClick={() => add()} className="justify-center text-center">
-          {sec === "education" ? "Add another degree or course" : "Yes, add another"}
-        </Option>
+        {sec === "experience" ? (
+          <>
+            <Option onClick={() => add({ experienceType: "internship" })} className="justify-center text-center">
+              Add an internship
+            </Option>
+            <Option onClick={() => add({ experienceType: "job" })} className="justify-center text-center">
+              Add a job
+            </Option>
+          </>
+        ) : (
+          <Option onClick={() => add()} className="justify-center text-center">
+            {sec === "education" ? "Add another degree or course" : "Yes, add another"}
+          </Option>
+        )}
         <Option onClick={() => advance(state, step.key)} className="justify-center text-center">
-          No, move on
+          {sec === "experience" ? "No, that's all" : "No, move on"}
         </Option>
       </div>
       <Spacer />

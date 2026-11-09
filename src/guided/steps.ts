@@ -9,6 +9,8 @@ type Set<T> = (s: S, value: T) => S;
 interface Base {
   key: string;
   section: SectionId;
+  /** Passed over when moving through the questions if already answered (an earlier answer set it); still editable from the overview. */
+  skipWhenAnswered?: boolean;
 }
 
 export type Step =
@@ -251,7 +253,8 @@ function experienceSteps(s: S): Step[] {
     const k = `experience.${i}`;
     const steps: Step[] = [
       {
-        kind: "choice", key: `${k}.type`, section: sec, q: "Was it an internship or a job?", options: ["Internship", "Job"],
+        // Usually answered already: "Yes, an internship" / "Add another job" set it.
+        kind: "choice", key: `${k}.type`, section: sec, q: "Was it an internship or a job?", options: ["Internship", "Job"], skipWhenAnswered: true,
         get: () => (item.experienceType === "job" ? "Job" : item.experienceType === "internship" ? "Internship" : ""),
         set: (st, v) => setItem(st, sec, i, { experienceType: v === "Job" ? "job" : "internship" }),
       },
@@ -470,6 +473,9 @@ export function buildSteps(s: S): Step[] {
 
 export const firstStepOfSection = (s: S, id: SectionId) => buildSteps(s).find((st) => st.section === id)!.key;
 
-/** The first step of item `index` in a list section (falls back to the section intro). */
+/** A question passed over when moving through the flow: marked skipWhenAnswered, and answered. */
+export const isPassedOver = (st: Step, s: S) => Boolean(st.skipWhenAnswered) && (st.kind === "choice" || st.kind === "text") && st.get(s).trim() !== "";
+
+/** The first question of item `index` in a list section, passing over ones already answered (falls back to the section intro). */
 export const firstStepOfItem = (s: S, id: SectionId, index: number) =>
-  buildSteps(s).find((st) => st.key.startsWith(`${id}.${index}.`))?.key ?? `${id}.intro`;
+  buildSteps(s).find((st) => st.key.startsWith(`${id}.${index}.`) && !isPassedOver(st, s))?.key ?? `${id}.intro`;

@@ -217,6 +217,12 @@ To request from the CURIE team:
   - Home is on every page except Home itself.
   - The downloaded PDF is the original builder's, unchanged, for every look (checked by e2e/pdf-parity.spec.ts).
   - Showing previous entries while adding another (for context) is Vijay's call; not done yet.
+- From Manoj's review (Nov 9, 2026):
+  - Full CV view: one top bar like other screens (Back left, look name with arrows in the middle, zoom right).
+  - Back on a question goes to the previous question in the flow, even after a trip Home.
+  - The section name on the bar opens "Your <section> so far": every answer, tap to change, back to the same question.
+  - Work Experience asks "internship or job?" once: "Yes, an internship / Yes, a job", and "Add an internship / Add a job" for more.
+  - Choose a look on phones: a swipeable carousel of full-size CVs (only neighbouring looks are drawn, for low-end phones).
 
 ## Open questions
 1. What happens if the 10th attempt is not accepted? (For example: the CV stays as is with its last review, and a mentor at VigyanShaala is contacted, or attempts reset after a cool-off.)
