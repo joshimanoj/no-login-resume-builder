@@ -8,6 +8,8 @@ import { promptsToHtml, bulletsToHtml } from "./steps";
  */
 export function demoState(): GuidedState {
   const s = initialState();
+  // The demo is the newest CV on this phone: signing in keeps it rather than replacing it with the account's copy.
+  s.updatedAt = Date.now();
   const exp1 = ["built 5 pages of the company website", "HTML, CSS, JavaScript and Git", "the site went live and enquiries grew by 30% in 2 months"];
   const exp2 = ["cleaned and plotted 10 years of rainfall data for a research group", "Python, Pandas and MS Excel", "my charts were used in the group's report to 3 district offices"];
   const ach = ["volunteered at health camps and cleanliness drives in 4 villages", "worked in a team of 20 NSS volunteers", "completed 120 hours of service and got the NSS certificate"];

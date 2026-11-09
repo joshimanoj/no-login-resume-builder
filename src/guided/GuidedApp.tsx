@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { GuidedProvider } from "./GuidedContext";
 import { clearState, saveState } from "./state";
+import { signOut } from "./backend";
 import { demoState } from "./demo";
 import { StepScreen } from "./StepScreen";
 import {
@@ -69,7 +70,8 @@ function DemoLoader() {
   useEffect(() => {
     if (import.meta.env.DEV) {
       try {
-        if (params.get("live") === "1") localStorage.removeItem("guided-mock-backend");
+        if (params.get("live") === "1")
+          localStorage.removeItem("guided-mock-backend");
         else localStorage.setItem("guided-mock-backend", "1");
       } catch {
         // Storage blocked: the demo still loads, using whichever backend is configured.
@@ -88,16 +90,20 @@ function DemoLoader() {
  */
 function FreshStart() {
   useEffect(() => {
-    clearState();
-    try {
-      // Supabase keeps the sign-in under "sb-..." keys; removing them signs this browser out.
-      Object.keys(localStorage)
-        .filter((k) => k.startsWith("sb-"))
-        .forEach((k) => localStorage.removeItem(k));
-    } catch {
-      // Storage blocked: nothing saved to clear.
-    }
-    window.location.replace("/");
+    void (async () => {
+      // Sign out properly first, so the sign-in can't be written back while this page is open.
+      await signOut("local").catch(() => undefined);
+      clearState();
+      try {
+        // Supabase keeps the sign-in under "sb-..." keys; removing them signs this browser out.
+        Object.keys(localStorage)
+          .filter((k) => k.startsWith("sb-"))
+          .forEach((k) => localStorage.removeItem(k));
+      } catch {
+        // Storage blocked: nothing saved to clear.
+      }
+      window.location.replace("/");
+    })();
   }, []);
   return null;
 }

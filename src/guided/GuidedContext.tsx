@@ -3,6 +3,7 @@ import { useLocation, useNavigate, type NavigateFunction } from "react-router-do
 import { clearState, hasEnteredAnything, initialState, loadState, saveState, type GuidedState } from "./state";
 import { buildSteps, isPassedOver } from "./steps";
 import { answerText, entryOf } from "./answers";
+import { mergeOnSignIn } from "./sync";
 import { pullCv, pullSubmissions, pushCv, signOut as backendSignOut, usingMock, watchUser } from "./backend";
 
 interface GuidedContextValue {
@@ -42,7 +43,6 @@ export const returnTo = (navigate: NavigateFunction, back: string) =>
 const SYNCED = ["data", "template", "answers", "prompts", "improved"] as const;
 const contentChanged = (a: GuidedState, b: GuidedState) => SYNCED.some((k) => a[k] !== b[k]);
 const syncedJson = (s: GuidedState) => JSON.stringify(SYNCED.map((k) => s[k]));
-const hasContent = (s: GuidedState) => s.submissions.length > 0 || hasEnteredAnything(s.data);
 
 export function GuidedProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GuidedState>(loadState);
@@ -80,18 +80,14 @@ export function GuidedProvider({ children }: { children: ReactNode }) {
         try {
           const [cloud, submissions] = await Promise.all([pullCv(user.id), pullSubmissions(user.id)]);
           update((s) => {
-            const otherAccount = Boolean(s.user && s.user.id !== user.id);
-            const base = otherAccount ? initialState() : s;
-            const useCloud = cloud && (otherAccount || !hasContent(base) || cloud.updatedAt > (base.updatedAt ?? 0));
-            if (useCloud) {
-              const fromCloud = { ...base, ...cloud, user, submissions };
-              lastPushed.current = syncedJson(fromCloud);
-              return fromCloud;
-            }
-            return { ...base, user, submissions, updatedAt: base.updatedAt ?? Date.now() };
+            const { state: merged, fromCloud } = mergeOnSignIn(s, cloud, submissions, user);
+            if (fromCloud) lastPushed.current = syncedJson(merged);
+            return merged;
           });
         } catch (error) {
           console.error("Could not load the saved CV:", error);
+          // Without her account copy we can't tell which is newer: don't save over it. A later sign-in event retries.
+          loadedFor.current = null;
           update((s) => ({ ...s, user }));
         }
         setAuthReady(true);
@@ -103,6 +99,8 @@ export function GuidedProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const user = state.user;
     if (!user || usingMock() || loadedFor.current !== user.id) return;
+    // An empty CV is never saved over her account copy (e.g. this phone was cleared).
+    if (!hasEnteredAnything(state.data)) return;
     const payload = syncedJson(state);
     if (payload === lastPushed.current) return;
     const t = setTimeout(() => {

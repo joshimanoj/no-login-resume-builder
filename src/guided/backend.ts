@@ -48,8 +48,9 @@ export async function signInWithGoogle(returnTo: string): Promise<GuidedUser | n
   return null;
 }
 
-export async function signOut(): Promise<void> {
-  if (!usingMock()) await db().auth.signOut();
+/** Signs out; "local" signs out this browser only (her other devices stay signed in). */
+export async function signOut(scope: "global" | "local" = "global"): Promise<void> {
+  if (!usingMock()) await db().auth.signOut({ scope });
 }
 
 /** Calls `onChange` with the signed-in user now and whenever it changes. Not used in mock mode. */
