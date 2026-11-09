@@ -452,3 +452,11 @@ test("each question shows what she has entered so far; starting a new entry, the
   await tap(page, "Add a job");
   await expect(page.getByRole("button", { name: /^Already added: Web Development Intern, Ankur Tech Solutions; Research Intern, IISER Pune/ })).toBeVisible();
 });
+
+test("/fresh clears the CV on this device and opens the landing page", async ({ page }) => {
+  await returningStudent(page);
+  await page.goto("/fresh");
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("button", { name: "Let's start without signing in" })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("guided-cv-v1") ?? "")).not.toContain("Asha");
+});

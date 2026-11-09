@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { GuidedProvider } from "./GuidedContext";
-import { saveState } from "./state";
+import { clearState, saveState } from "./state";
 import { demoState } from "./demo";
 import { StepScreen } from "./StepScreen";
 import {
@@ -25,6 +25,7 @@ export default function GuidedApp() {
     <Routes>
       {/* Outside the provider so nothing re-saves the old CV over the demo before the reload. */}
       <Route path="demo" element={<DemoLoader />} />
+      <Route path="fresh" element={<FreshStart />} />
       <Route
         path="*"
         element={
@@ -78,5 +79,25 @@ function DemoLoader() {
     // Full reload so the app starts in the chosen mode with the demo CV.
     window.location.replace(params.get("to") === "cv" ? "/cv" : "/");
   }, [params]);
+  return null;
+}
+
+/**
+ * /fresh clears this browser: the CV on this device (e.g. the demo) and the Google sign-in, then opens
+ * the landing page as a first-time student. A CV saved to an account stays in the account.
+ */
+function FreshStart() {
+  useEffect(() => {
+    clearState();
+    try {
+      // Supabase keeps the sign-in under "sb-..." keys; removing them signs this browser out.
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith("sb-"))
+        .forEach((k) => localStorage.removeItem(k));
+    } catch {
+      // Storage blocked: nothing saved to clear.
+    }
+    window.location.replace("/");
+  }, []);
   return null;
 }
