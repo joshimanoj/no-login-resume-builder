@@ -178,6 +178,13 @@ export const changedSinceReview = (s: GuidedState) => {
   const latest = latestSubmission(s);
   return Boolean(latest?.review) && !unchangedSinceSubmit(s, latest!);
 };
+/** She has changed this section since her latest submission (Curie's "Improved" tag). */
+export const sectionChangedSinceSubmit = (s: GuidedState, id: SectionId) => {
+  const latest = latestSubmission(s);
+  if (!latest) return false;
+  const pick = (d: ResumeData) => JSON.stringify(id === "personal" ? d.personalInfo : d[id]);
+  return pick(latest.snapshot) !== pick(s.data);
+};
 /** Sections Curie asked her to improve in her latest review (none once accepted). */
 export const flaggedSections = (s: GuidedState): SectionId[] => {
   const review = latestSubmission(s)?.review;

@@ -146,29 +146,35 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   await expect(page.getByText("This is attempt 1 of 10.", { exact: false })).toBeVisible();
   await tap(page, "Submit to Curie");
 
-  // Review 1: needs another attempt
+  // Review 1, on her CV's home (Curie's review tab): needs another attempt
+  await expect(page).toHaveURL(/\/cv\?tab=review$/);
   await expect(page.getByText("Curie is reviewing your CV")).toBeVisible();
   await expect(page.getByText("Needs another attempt")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("Add a few more skills that fit the roles you want.")).toBeVisible();
+  // Both tabs: her CV is a tap away.
+  await page.getByRole("tab", { name: "My CV" }).click();
+  await expect(page.locator("text=Asha Rao").first()).toBeVisible();
+  await page.getByRole("tab", { name: /Curie's review/ }).click();
 
-  // Improve Skills from the section overview (same questions, no old form), then submit again
+  // Improve Skills: its questions, with Curie's comment; Submit again as soon as she changes something
   await tap(page, "Improve this section");
   await expect(page.getByText("Curie said:")).toBeVisible();
-  await page.getByRole("region", { name: "Skills" }).getByRole("button", { name: /^Skills/ }).click();
+  await tap(page, "Start this section");
   await page.getByPlaceholder("Add your own").fill("Python");
   await page.getByRole("button", { name: "Add", exact: true }).click();
-  await tap(page, "Save");
-  await expect(page).toHaveURL(/\/improve\/skills$/);
-  await expect(page.getByRole("region", { name: "Skills" }).getByRole("button", { name: /^Skills.*Python/ })).toBeVisible();
-  await tap(page, "Done, back to my review");
+  await next(page);
+  await expect(page.getByText("You've made changes since Curie's review.")).toBeVisible();
+  await page.goto("/cv?tab=review");
   await expect(page.getByText("✓ Improved")).toBeVisible();
   await tap(page, "Submit again");
   await expect(page.getByText("This is attempt 2 of 10.", { exact: false })).toBeVisible();
   await tap(page, "Submit to Curie");
 
-  // Review 2: accepted -> choose a look -> download
+  // Review 2: accepted -> its moment -> her CV's home -> change the look -> download
   await expect(page.getByRole("heading", { name: "Accepted!" })).toBeVisible({ timeout: 15_000 });
-  await tap(page, "Choose a look");
+  await tap(page, "See my CV and the review");
+  await expect(page.getByText("Accepted by Curie", { exact: true })).toBeVisible();
+  await tap(page, "Change look");
   await expect(page.getByRole("radiogroup", { name: "Looks" }).getByRole("radio")).toHaveCount(9);
   await page.getByRole("radio", { name: "Minimal" }).click();
   await tap(page, "Use Minimal");
@@ -187,6 +193,7 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
 });
 
 test("download needs only the required details, not sign-in or a review", async ({ page }) => {
+  // (On Your CV before submitting, Download is one of the small actions under "Submit to Curie".)
   // An empty CV can't be downloaded yet.
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
@@ -197,7 +204,7 @@ test("download needs only the required details, not sign-in or a review", async 
   // A complete CV can be downloaded straight away, without signing in or submitting.
   await page.goto("/demo?to=cv");
   await expect(page).toHaveURL(/\/cv$/);
-  await page.getByRole("button", { name: "Download my CV" }).click();
+  await page.getByRole("button", { name: "Download", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Your CV is ready to send" })).toBeVisible();
   await expect(page.locator("#resume-preview")).toContainText("Asha Rao");
 });
@@ -502,9 +509,10 @@ test("after a review, 'Edit my CV' goes back into the questions, and she can sub
   await expect(page.getByText("You've made changes since Curie's review.")).toBeVisible();
   // The review now offers to send the changes, with more editing a tap away.
   await page.goto("/review");
-  await tap(page, "Keep editing my CV");
+  await expect(page).toHaveURL(/\/cv\?tab=review$/);
+  await tap(page, "Edit my CV");
   await expect(page.getByRole("heading", { name: "Which part do you want to change?" })).toBeVisible();
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Close" }).click();
   await tap(page, "Submit again");
   await expect(page.getByText("This is attempt 2 of 10.", { exact: false })).toBeVisible();
 });

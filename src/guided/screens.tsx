@@ -17,6 +17,7 @@ import {
   SECTIONS,
   attemptsLeft,
   changedSinceReview,
+  sectionChangedSinceSubmit,
   clearState,
   hasEnteredAnything,
   initialState,
@@ -245,100 +246,121 @@ export function CvPreview({ data, template, id, zoom }: { data: ResumeData; temp
   );
 }
 
+const CELEBRATED_KEY = "guided-celebrated";
+const wasCelebrated = (id: string) => {
+  try {
+    return localStorage.getItem(CELEBRATED_KEY) === id;
+  } catch {
+    return true;
+  }
+};
+
+/**
+ * Her CV's home after building it: the CV and (once she has submitted) Curie's review in two tabs,
+ * with the actions below. The main button follows where she is: submit, edit, submit again, or download.
+ */
 export function YourCv() {
+  usePollReview();
   const { state, goStep } = useGuided();
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const latest = latestSubmission(state);
+  const tab = latest && params.get("tab") === "review" ? "review" : "cv";
+  const setTab = (t: "cv" | "review") => setParams(t === "review" ? { tab: "review" } : {}, { replace: true });
   const reviewing = isUnderReview(state);
   const acceptedNow = isAcceptedAndUnchanged(state);
-  const editedAfterAccept = isAccepted(state) && !acceptedNow;
+  const changed = changedSinceReview(state);
   const failing = firstFailingSection(state);
-  const rejected = latest?.review?.verdict === "rejected";
+  const left = attemptsLeft(state);
   // Download follows the original builder's rules: the required details, nothing more. No sign-in or review needed.
   const downloadReady = canDownload(state.data);
   const [editing, setEditing] = useState(false);
 
+  // An acceptance gets its moment once: the "Accepted!" screen, then back here.
+  useEffect(() => {
+    if (latest?.review?.verdict === "accepted" && acceptedNow && !wasCelebrated(latest.id)) navigate("/review", { replace: true });
+  }, [latest, acceptedNow, navigate]);
+
+  const download = () => navigate("/download");
+  const edit = () => setEditing(true);
+  // The main button follows where she is.
+  const mainAction = (): { label: string; onClick: () => void; tone?: "green" } | null => {
+    if (reviewing) return null;
+    if (acceptedNow) return downloadReady ? { label: "Download my CV", onClick: download, tone: "green" } : null;
+    if (failing) return { label: `Finish ${failing.label}`, onClick: () => goStep(firstStepOfSection(state, failing.id)) };
+    if (left <= 0) return null;
+    if (!latest) return { label: "Submit to Curie for review", onClick: () => navigate("/submit"), tone: "green" };
+    // Reviewed and nothing changed yet: submitting the same CV would only use up an attempt.
+    if (latest.review && !changed) return { label: "Edit my CV", onClick: edit };
+    return { label: "Submit again", onClick: () => navigate("/submit"), tone: "green" };
+  };
+  const main = mainAction();
+
+  const tabClass = (on: boolean) => `min-h-10 rounded-lg text-sm font-medium ${on ? "bg-white text-primary shadow-sm" : "text-slate-600"}`;
+  const reviewLabel = !latest ? "" : reviewing ? "Curie is reviewing" : latest.review ? `Curie's review · ${latest.review.stars}★` : "Curie's review";
+
   return (
     <Screen title="Your CV" back={false} wide>
-      {reviewing && <Banner tone="info">Curie is reviewing your CV. You can't edit it until the review is ready.</Banner>}
-      {acceptedNow && <Banner tone="good">Accepted by Curie.</Banner>}
-      {editedAfterAccept && <Banner tone="info">You changed your CV after Curie accepted it. Submit it again if you'd like a new review.</Banner>}
-      {rejected && !reviewing && <Banner tone="warn">Curie asked for another attempt. Improve the sections in your review, then submit again.</Banner>}
-
-      {/* Things she may want to do before submitting, so they come first. */}
-      {!reviewing && (
-        <div className="mt-2 grid grid-cols-2 gap-2.5">
-          <SecondaryButton icon={LayoutTemplate} onClick={() => navigate("/look")}>
-            Change the look
-          </SecondaryButton>
-          <SecondaryButton icon={PenLine} onClick={() => setEditing(true)}>
-            Edit my CV
-          </SecondaryButton>
-          <EditCvSheet open={editing} onOpenChange={setEditing} />
-          {rejected && (
-            <SecondaryButton icon={Sparkles} className="col-span-2" onClick={() => navigate("/review")}>
-              See Curie's review
-            </SecondaryButton>
-          )}
+      {latest && (
+        <div className="mt-1 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Your CV and Curie's review">
+          <button type="button" role="tab" aria-selected={tab === "cv"} onClick={() => setTab("cv")} className={tabClass(tab === "cv")}>
+            My CV
+          </button>
+          <button type="button" role="tab" aria-selected={tab === "review"} onClick={() => setTab("review")} className={tabClass(tab === "review")}>
+            {reviewLabel}
+          </button>
         </div>
       )}
 
-      <div className="mt-3">
-        <CvPreview data={state.data} template={state.template} />
-      </div>
+      {tab === "review" && latest ? (
+        <ReviewPanel submission={latest} />
+      ) : (
+        <>
+          {reviewing && <Banner tone="info">Curie is reviewing your CV. You can't edit it until the review is ready.</Banner>}
+          {acceptedNow && <Banner tone="good">Accepted by Curie.</Banner>}
+          <div className="mt-3">
+            <CvPreview data={state.data} template={state.template} />
+          </div>
+        </>
+      )}
 
+      <EditCvSheet open={editing} onOpenChange={setEditing} />
       <Actions>
-        <div className="space-y-1.5">
-          {reviewing ? (
-            <BigButton onClick={() => navigate("/review")}>Check the review status</BigButton>
-          ) : acceptedNow ? null : failing ? (
-            <BigButton onClick={() => goStep(firstStepOfSection(state, failing.id))}>Finish {failing.label}</BigButton>
-          ) : (
-            <BigButton tone="green" onClick={() => navigate("/submit")} disabled={attemptsLeft(state) <= 0}>
-              {rejected || editedAfterAccept ? "Submit again" : "Submit to Curie for review"}
+        <div className="space-y-2">
+          {left <= 0 && !acceptedNow && <Hint className="text-center">You've used all {MAX_ATTEMPTS} attempts. Please talk to your VigyanShaala mentor.</Hint>}
+          {latest?.review && !changed && !acceptedNow && left > 0 && !failing && (
+            <Hint className="text-center">Change your CV using Curie's feedback, then submit again.</Hint>
+          )}
+          {main && (
+            <BigButton tone={main.tone} onClick={main.onClick}>
+              {main.label}
             </BigButton>
           )}
-          {/* Submitting to Curie is the main action; download is a smaller option, unless she's already accepted. */}
-          {downloadReady && acceptedNow ? (
-            <BigButton tone="green" onClick={() => navigate("/download")}>
-              <FileDown className="h-5 w-5" aria-hidden /> Download my CV
-            </BigButton>
-          ) : downloadReady ? (
-            <button
-              type="button"
-              onClick={() => navigate("/download")}
-              className="mx-auto flex min-h-10 items-center gap-1.5 rounded-full px-3 text-sm font-medium text-primary hover:bg-slate-50"
-            >
-              <FileDown className="h-4 w-4" aria-hidden /> Download my CV
-            </button>
-          ) : (
-            <Hint className="text-center">Add the required details to download your CV.</Hint>
+          {/* Always a tap away: editing, the look, and the download (when it isn't the main button). */}
+          {!reviewing && (
+            <div className="flex gap-2 [&>*]:flex-1">
+              {main?.onClick !== edit && <SmallAction icon={PenLine} label="Edit my CV" onClick={edit} />}
+              <SmallAction icon={LayoutTemplate} label="Change look" onClick={() => navigate("/look")} />
+              {main?.onClick !== download && <SmallAction icon={FileDown} label="Download" onClick={download} disabled={!downloadReady} />}
+            </div>
           )}
+          {!downloadReady && !reviewing && <Hint className="text-center">Add the required details to download your CV.</Hint>}
         </div>
       </Actions>
     </Screen>
   );
 }
 
-function SecondaryButton({
-  icon: Icon,
-  className = "",
-  children,
-  onClick,
-}: {
-  icon: LucideIcon;
-  className?: string;
-  children: React.ReactNode;
-  onClick: () => void;
-}) {
+function SmallAction({ icon: Icon, label, onClick, disabled = false }: { icon: LucideIcon; label: string; onClick: () => void; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-h-12 items-center justify-center gap-2 rounded-xl border-[1.5px] border-slate-300 bg-white px-3 text-sm font-medium text-primary active:bg-slate-50 ${className}`}
+      disabled={disabled}
+      className="flex min-h-12 flex-col items-center justify-center gap-0.5 rounded-xl border-[1.5px] border-slate-300 bg-white px-1 text-xs font-medium text-primary active:bg-slate-50 disabled:opacity-40"
     >
-      <Icon className="h-4 w-4 shrink-0" aria-hidden />
-      {children}
+      <Icon className="h-4 w-4" aria-hidden />
+      {label}
     </button>
   );
 }
@@ -525,127 +547,86 @@ function usePollReview() {
   }, [pending, update]);
 }
 
+/** /review: the "Accepted!" moment, once per acceptance; otherwise Curie's review tab on her CV's home. */
 export function ReviewScreen() {
-  usePollReview();
   const { state } = useGuided();
   const navigate = useNavigate();
   const latest = latestSubmission(state);
-  // She picks the section to change (Curie's flagged ones first).
-  const [editing, setEditing] = useState(false);
-  const editCv = () => setEditing(true);
-  const editSheet = <EditCvSheet open={editing} onOpenChange={setEditing} />;
-  if (!latest) return <Navigate to="/cv" replace />;
-
-  if (!latest.review) {
-    const mins = Math.max(0, Math.round((Date.now() - latest.submittedAt) / 60000));
-    return (
-      <Screen back={false}>
-        <Spacer />
-        <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-secondary" aria-hidden />
-        <Question>
-          <span className="block text-center">Curie is reviewing your CV</span>
-        </Question>
-        <Hint className="text-center">
-          Attempt {latest.attempt} of {MAX_ATTEMPTS} · submitted {mins === 0 ? "just now" : `${mins} min ago`}
-        </Hint>
-        <div className="mt-6 rounded-xl border border-slate-200 p-4 text-center text-[15px]">
-          You can close this page. Your review will be here when you come back.
-        </div>
-        <Actions>
-          <BigButton tone="outline" onClick={() => navigate("/cv")}>
-            View my CV
-          </BigButton>
-        </Actions>
-      </Screen>
-    );
-  }
-
-  const r = latest.review;
-  if (r.verdict === "accepted") {
-    return (
-      <Screen back={false}>
-        <Spacer />
-        <div className="text-center text-5xl" aria-hidden>
-          🎉
-        </div>
-        <Question>
-          <span className="block text-center text-[26px]">Accepted!</span>
-        </Question>
-        <div className="mt-3 rounded-2xl bg-[#eaf5e4] p-4 text-center text-[#1f3d12]">
-          <Stars value={r.stars} />
-          <p className="text-sm">
-            {r.stars} out of 5 · Attempt {latest.attempt}
-          </p>
-        </div>
-        <p className="mt-3 rounded-xl border border-slate-200 p-4 text-[15px]">{r.overall}</p>
-        <SectionFeedbackList submission={latest} />
-        <LinkButton className="mt-3" onClick={() => navigate("/look")}>
-          Choose a look
-        </LinkButton>
-        <LinkButton onClick={editCv}>Edit my CV</LinkButton>
-        {editSheet}
-        <Actions>
-          <BigButton tone="green" onClick={() => navigate("/download")}>
-            Download my CV
-          </BigButton>
-        </Actions>
-      </Screen>
-    );
-  }
-
-  const needs = r.sections.filter((s) => s.status === "needs_work");
-  const allImproved = needs.every((n) => state.improved.includes(n.id));
-  const left = attemptsLeft(state);
-  const changed = changedSinceReview(state);
+  const r = latest?.review;
+  const celebrate = Boolean(latest && r?.verdict === "accepted" && isAcceptedAndUnchanged(state) && !wasCelebrated(latest.id));
+  useEffect(() => {
+    if (!celebrate || !latest) return;
+    try {
+      localStorage.setItem(CELEBRATED_KEY, latest.id);
+    } catch {
+      // Storage blocked: she may see it again, which is fine.
+    }
+  }, [celebrate, latest]);
+  if (!latest || !r || !celebrate) return <Navigate to={latest ? "/cv?tab=review" : "/cv"} replace />;
   return (
-    <Screen title="Curie's review" back={false}>
-      <div className="mt-2 rounded-2xl bg-[#fdf3e1] p-4 text-center text-[#633806]">
-        <p className="text-base font-medium">Needs another attempt</p>
+    <Screen back={false}>
+      <Spacer />
+      <div className="text-center text-5xl" aria-hidden>
+        🎉
+      </div>
+      <Question>
+        <span className="block text-center text-[26px]">Accepted!</span>
+      </Question>
+      <div className="mt-3 rounded-2xl bg-[#eaf5e4] p-4 text-center text-[#1f3d12]">
         <Stars value={r.stars} />
         <p className="text-sm">
-          {r.stars} out of 5 · Attempt {latest.attempt} of {MAX_ATTEMPTS}
+          {r.stars} out of 5 · Attempt {latest.attempt}
+        </p>
+      </div>
+      <p className="mt-3 rounded-xl border border-slate-200 p-4 text-[15px]">{r.overall}</p>
+      <Actions>
+        <BigButton tone="green" onClick={() => navigate("/download")}>
+          Download my CV
+        </BigButton>
+        <LinkButton onClick={() => navigate("/cv?tab=review", { replace: true })}>See my CV and the review</LinkButton>
+      </Actions>
+    </Screen>
+  );
+}
+
+/** Curie's review of an attempt: verdict, overall comment, section feedback and past attempts. */
+function ReviewPanel({ submission }: { submission: Submission }) {
+  const r = submission.review;
+  if (!r) {
+    const mins = Math.max(0, Math.round((Date.now() - submission.submittedAt) / 60000));
+    return (
+      <div className="mt-8 text-center">
+        <div className="mx-auto h-12 w-12 animate-spin rounded-full border-4 border-slate-200 border-t-secondary" aria-hidden />
+        <p className="mt-4 text-lg font-medium">Curie is reviewing your CV</p>
+        <Hint className="text-center">
+          Attempt {submission.attempt} of {MAX_ATTEMPTS} · submitted {mins === 0 ? "just now" : `${mins} min ago`}
+        </Hint>
+        <p className="mt-6 rounded-xl border border-slate-200 p-4 text-[15px]">You can close this page. Your review will be here when you come back.</p>
+      </div>
+    );
+  }
+  const accepted = r.verdict === "accepted";
+  return (
+    <>
+      <div className={`mt-3 rounded-2xl p-4 text-center ${accepted ? "bg-[#eaf5e4] text-[#1f3d12]" : "bg-[#fdf3e1] text-[#633806]"}`}>
+        <p className="text-base font-medium">{accepted ? "Accepted by Curie" : "Needs another attempt"}</p>
+        <Stars value={r.stars} />
+        <p className="text-sm">
+          {r.stars} out of 5 · Attempt {submission.attempt} of {MAX_ATTEMPTS}
         </p>
       </div>
       <div className="mt-3 rounded-xl border border-slate-200 p-4 text-[15px]">
         <p className="font-medium">Overall</p>
         <p className="mt-1">{r.overall}</p>
       </div>
-      <SectionFeedbackList submission={latest} />
+      <SectionFeedbackList submission={submission} />
       <AttemptHistory />
-      {editSheet}
-      <Actions>
-        <div>
-          {left <= 0 ? (
-            <>
-              <Hint className="text-center">You've used all {MAX_ATTEMPTS} attempts. Please talk to your VigyanShaala mentor.</Hint>
-              <LinkButton onClick={() => navigate("/cv")}>See my CV</LinkButton>
-            </>
-          ) : changed ? (
-            // She has made changes: sending them is the next step; more editing is still a tap away.
-            <>
-              {!allImproved && <Hint className="mb-2 text-center">Some sections Curie mentioned aren't changed yet.</Hint>}
-              <BigButton tone="green" onClick={() => navigate("/submit")}>
-                Submit again
-              </BigButton>
-              <LinkButton onClick={editCv}>Keep editing my CV</LinkButton>
-            </>
-          ) : (
-            // Nothing changed yet: submitting the same CV would only use up an attempt.
-            <>
-              <Hint className="mb-2 text-center">Change your CV using Curie's feedback, then submit again.</Hint>
-              <BigButton onClick={editCv}>Edit my CV</BigButton>
-              <LinkButton onClick={() => navigate("/cv")}>See my CV</LinkButton>
-            </>
-          )}
-        </div>
-      </Actions>
-    </Screen>
+    </>
   );
 }
 
 function SectionFeedbackList({ submission }: { submission: Submission }) {
-  const { state } = useGuided();
-  const navigate = useNavigate();
+  const { state, goStep } = useGuided();
   const r = submission.review!;
   const ordered = [...r.sections].sort((a, b) => (a.status === b.status ? 0 : a.status === "needs_work" ? -1 : 1));
   const accepted = r.verdict === "accepted";
@@ -653,7 +634,8 @@ function SectionFeedbackList({ submission }: { submission: Submission }) {
     <div className="mt-5">
       <p className="text-sm font-medium text-slate-600">Section feedback</p>
       {ordered.map((f) => {
-        const improved = state.improved.includes(f.id);
+        // "Improved" once she has changed the section since this attempt.
+        const improved = sectionChangedSinceSubmit(state, f.id);
         return (
           <div key={f.id} className="mt-2.5 rounded-xl border border-slate-200 p-3.5 text-[15px]">
             <div className="flex items-center justify-between gap-2">
@@ -670,7 +652,7 @@ function SectionFeedbackList({ submission }: { submission: Submission }) {
             {!accepted && f.status === "needs_work" && (
               <button
                 type="button"
-                onClick={() => navigate(`/improve/${f.id}`)}
+                onClick={() => goStep(firstStepOfSection(state, f.id))}
                 className="mt-2 min-h-10 rounded-lg border-[1.5px] border-primary px-3 text-sm font-medium text-primary"
               >
                 {improved ? "Change it again" : "Improve this section"}
@@ -730,44 +712,13 @@ export function AttemptView() {
   );
 }
 
+/** /improve/:section (older links): that section's questions, where Curie's comment is shown. */
 export function Improve() {
   const { section: raw } = useParams();
   const section = sectionParam(raw);
-  const { state, update } = useGuided();
-  const navigate = useNavigate();
-  const latest = latestSubmission(state);
-  const feedback = latest?.review?.sections.find((s) => s.id === section);
-  if (!section || !feedback) return <Navigate to="/review" replace />;
-  if (isUnderReview(state)) return <Navigate to="/cv" replace />;
-  const issues = sectionIssues(state, section);
-  return (
-    <Screen title={`Improve ${sectionDef(section).label}`} label={<SectionsMenu current={section} showAnswers={false} />} wide>
-      <div className="sticky top-0 z-10 -mx-5 bg-white px-5 pb-2 pt-1">
-        <div className="rounded-xl bg-[#fdf3e1] p-3.5 text-[15px] text-[#633806]">
-          <span className="font-medium">Curie said: </span>
-          {feedback.comment}
-        </div>
-      </div>
-      {issues.map((i) => (
-        <Banner key={i.message} tone="warn">
-          {i.message}
-        </Banner>
-      ))}
-      <SectionOverview section={section} />
-      <Actions>
-        <BigButton
-          className="mt-4"
-          disabled={issues.length > 0}
-          onClick={() => {
-            update((s) => ({ ...s, improved: Array.from(new Set([...s.improved, section])) }));
-            navigate("/review");
-          }}
-        >
-          Done, back to my review
-        </BigButton>
-      </Actions>
-    </Screen>
-  );
+  const { state } = useGuided();
+  if (!section || isUnderReview(state)) return <Navigate to="/cv?tab=review" replace />;
+  return <Navigate to={stepPath(firstStepOfSection(state, section))} replace />;
 }
 
 // ---------- look, photo, download ----------
