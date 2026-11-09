@@ -460,3 +460,17 @@ test("/fresh clears the CV on this device and opens the landing page", async ({ 
   await expect(page.getByRole("button", { name: "Let's start without signing in" })).toBeVisible();
   expect(await page.evaluate(() => localStorage.getItem("guided-cv-v1") ?? "")).not.toContain("Asha");
 });
+
+test("a course or certificate can have an optional description, as in the original builder", async ({ page }) => {
+  await page.goto("/demo?to=cv");
+  await expect(page).toHaveURL(/\/cv$/);
+  await page.goto("/edit/certifications");
+  await page.getByRole("button", { name: /^What it covered/ }).click();
+  await expect(page.getByRole("heading", { name: "What did it cover?" })).toBeVisible();
+  await page.getByRole("textbox").fill("python basics, data types and simple programs");
+  await tap(page, "Save");
+  await expect(page).toHaveURL(/\/edit\/certifications$/);
+  await expect(page.getByRole("button", { name: /What it covered.*Python basics, data types and simple programs\./ })).toBeVisible();
+  await page.goto("/cv");
+  await expect(page.locator("text=Python basics, data types and simple programs.").first()).toBeVisible();
+});

@@ -1,5 +1,5 @@
 import { toTitleCase, type ResumeData } from "@/utils/resumeRules";
-import { htmlToBullets, paragraphToHtml, sentence } from "@/utils/plainText";
+import { htmlToParagraph, paragraphToHtml, sentence } from "@/utils/plainText";
 import { SECTIONS, newId, type GuidedState, type ListSection, type SectionId } from "./state";
 
 type S = GuidedState;
@@ -86,7 +86,7 @@ export function newItem(sec: ListSection, preset: Record<string, unknown> = {}):
     projects: { name: "", description: "", technologies: "", date: "" },
     achievements: { title: "", description: "", date: "" },
     awards: { title: "", issuer: "", date: "", description: "" },
-    certifications: { name: "", issuer: "", date: "", expiryDate: "", credentialId: "" },
+    certifications: { name: "", issuer: "", date: "", expiryDate: "", credentialId: "", description: "" },
     publications: { title: "", journal: "", date: "", authors: "", link: "" },
   };
   return { id: newId(sec), ...base[sec], ...preset };
@@ -348,7 +348,7 @@ function awardSteps(s: S): Step[] {
       {
         kind: "text", key: `${k}.description`, section: sec, q: "What was it for?", multiline: true,
         hint: "In your own words. Example: Placed 2nd out of 40 college teams in a science quiz.",
-        get: () => htmlToBullets(str(item.description)).join(" "),
+        get: () => htmlToParagraph(str(item.description)),
         set: (st, v) => setItem(st, sec, i, { description: paragraphToHtml(sentence(v)) }),
       },
     ];
@@ -390,6 +390,13 @@ function certificationSteps(s: S): Step[] {
     steps.push({
       kind: "text", key: `${k}.credential`, section: sec, q: "Certificate ID or number", hint: "Optional. It helps employers check it.",
       skip: "Skip", get: () => str(item.credentialId), set: (st, v) => setItem(st, sec, i, { credentialId: v.trim() }),
+    });
+    // Optional, as in the original builder ("Description (Optional)"): shown under the certificate by every template.
+    steps.push({
+      kind: "text", key: `${k}.description`, section: sec, q: "What did it cover?", multiline: true, skip: "Skip",
+      hint: "Optional. One line in your own words. Example: Python basics, data types and simple programs.",
+      get: () => htmlToParagraph(str(item.description)),
+      set: (st, v) => setItem(st, sec, i, { description: paragraphToHtml(sentence(v)) }),
     });
     return steps;
   });

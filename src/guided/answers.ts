@@ -37,6 +37,7 @@ const LABELS: Record<string, string> = {
   title: "Title",
   issuer: "Given by",
   description: "What it was for",
+  "certifications.description": "What it covered",
   hasExpiry: "Does it expire?",
   expiry: "Expires",
   credential: "Certificate ID",
@@ -55,7 +56,7 @@ export function answerLabel(step: Step, s: GuidedState): string {
     const index = Number(step.key.split(".")[1]);
     return FIELD_LABEL[String(items(s, "education")[index]?.degree ?? "")] ?? "Subject";
   }
-  return LABELS[step.key] ?? LABELS[last] ?? ("q" in step ? step.q : last);
+  return LABELS[step.key] ?? LABELS[`${step.section}.${last}`] ?? LABELS[last] ?? ("q" in step ? step.q : last);
 }
 
 const monthText = (iso: string) => {

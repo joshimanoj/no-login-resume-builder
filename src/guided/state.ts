@@ -75,7 +75,7 @@ export const SECTIONS: SectionDef[] = [
     label: "Courses & Certifications",
     intro: "Online courses count, like NPTEL, Coursera or Google.",
     ask: "Have you done a course or got a certificate?",
-    covers: ["Course name and who gave it", "When you got it", "Certificate ID (optional)"],
+    covers: ["Course name and who gave it", "When you got it", "Certificate ID (optional)", "What it covered (optional)"],
   },
   {
     id: "publications",
