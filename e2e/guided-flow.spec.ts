@@ -482,8 +482,8 @@ test("after a review, 'Edit my CV' goes back into the questions, and she can sub
   await page.getByRole("button", { name: /Continue with Google/ }).click();
   await tap(page, "Submit to Curie");
   await expect(page.getByText("Needs another attempt")).toBeVisible({ timeout: 15_000 });
-
-  await page.goto("/cv");
+  // Nothing changed yet: the review leads to editing, not to submitting the same CV again.
+  await expect(page.getByRole("button", { name: "Submit again" })).toHaveCount(0);
   await tap(page, "Edit my CV");
   // Starts at the section Curie asked to improve, in the same question-by-question journey.
   await expect(page).toHaveURL(/\/s\/projects\.intro$/);
@@ -494,6 +494,9 @@ test("after a review, 'Edit my CV' goes back into the questions, and she can sub
   await page.getByRole("textbox").fill("College fest website for 300 students");
   await next(page);
   await expect(page.getByText("You've made changes since Curie's review.")).toBeVisible();
+  // The review now offers to send the changes, with more editing a tap away.
+  await page.goto("/review");
+  await expect(page.getByRole("button", { name: "Keep editing my CV" })).toBeVisible();
   await tap(page, "Submit again");
   await expect(page.getByText("This is attempt 2 of 10.", { exact: false })).toBeVisible();
 });

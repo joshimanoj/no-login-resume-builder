@@ -16,6 +16,7 @@ import {
   MAX_ATTEMPTS,
   SECTIONS,
   attemptsLeft,
+  changedSinceReview,
   clearState,
   hasEnteredAnything,
   initialState,
@@ -524,9 +525,11 @@ function usePollReview() {
 
 export function ReviewScreen() {
   usePollReview();
-  const { state } = useGuided();
+  const { state, goStep } = useGuided();
   const navigate = useNavigate();
   const latest = latestSubmission(state);
+  // Back into the questions, starting at the first section Curie asked to improve.
+  const editCv = () => goStep(editStartStep(state));
   if (!latest) return <Navigate to="/cv" replace />;
 
   if (!latest.review) {
@@ -575,6 +578,7 @@ export function ReviewScreen() {
         <LinkButton className="mt-3" onClick={() => navigate("/look")}>
           Choose a look
         </LinkButton>
+        <LinkButton onClick={editCv}>Edit my CV</LinkButton>
         <Actions>
           <BigButton tone="green" onClick={() => navigate("/download")}>
             Download my CV
@@ -587,6 +591,7 @@ export function ReviewScreen() {
   const needs = r.sections.filter((s) => s.status === "needs_work");
   const allImproved = needs.every((n) => state.improved.includes(n.id));
   const left = attemptsLeft(state);
+  const changed = changedSinceReview(state);
   return (
     <Screen title="Curie's review" back={false}>
       <div className="mt-2 rounded-2xl bg-[#fdf3e1] p-4 text-center text-[#633806]">
@@ -604,17 +609,28 @@ export function ReviewScreen() {
       <AttemptHistory />
       <Actions>
         <div>
-          {left > 0 ? (
+          {left <= 0 ? (
             <>
-              {!allImproved && <Hint className="mb-2 text-center">Improve the sections above, then submit again.</Hint>}
+              <Hint className="text-center">You've used all {MAX_ATTEMPTS} attempts. Please talk to your VigyanShaala mentor.</Hint>
+              <LinkButton onClick={() => navigate("/cv")}>See my CV</LinkButton>
+            </>
+          ) : changed ? (
+            // She has made changes: sending them is the next step; more editing is still a tap away.
+            <>
+              {!allImproved && <Hint className="mb-2 text-center">Some sections Curie mentioned aren't changed yet.</Hint>}
               <BigButton tone="green" onClick={() => navigate("/submit")}>
                 Submit again
               </BigButton>
+              <LinkButton onClick={editCv}>Keep editing my CV</LinkButton>
             </>
           ) : (
-            <Hint className="text-center">You've used all {MAX_ATTEMPTS} attempts. Please talk to your VigyanShaala mentor.</Hint>
+            // Nothing changed yet: submitting the same CV would only use up an attempt.
+            <>
+              <Hint className="mb-2 text-center">Change your CV using Curie's feedback, then submit again.</Hint>
+              <BigButton onClick={editCv}>Edit my CV</BigButton>
+              <LinkButton onClick={() => navigate("/cv")}>See my CV</LinkButton>
+            </>
           )}
-          <LinkButton onClick={() => navigate("/cv")}>See my CV</LinkButton>
         </div>
       </Actions>
     </Screen>
