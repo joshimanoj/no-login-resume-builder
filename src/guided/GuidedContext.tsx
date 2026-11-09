@@ -112,7 +112,8 @@ export function GuidedProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   const signOut = useCallback(async () => {
-    await backendSignOut();
+    // This phone only: her laptop or own phone stay signed in.
+    await backendSignOut("local");
     // Her CV is saved to her account; clear it from this phone in case the phone is shared.
     loadedFor.current = null;
     lastPushed.current = null;

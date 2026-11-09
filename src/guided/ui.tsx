@@ -12,6 +12,7 @@ export function Screen({
   progress,
   label,
   back = true,
+  home = true,
   onBack,
   title,
   sections,
@@ -25,6 +26,8 @@ export function Screen({
   sections?: { total: number; current: number; within: number };
   label?: ReactNode;
   back?: boolean;
+  /** Home button (off on Home itself, e.g. her CV's home after submitting). */
+  home?: boolean;
   /** What Back does; by default, the previous page in history. */
   onBack?: () => void;
   title?: string;
@@ -65,7 +68,7 @@ export function Screen({
               </button>
             )}
             {/* Home is on every page but Home itself, including hubs without a Back button (Your CV, the review). */}
-            {(back || title) && (
+            {home && (back || title) && (
               <Link to="/" aria-label="Home" className="-ml-2 flex h-11 w-11 items-center justify-center rounded-full text-primary active:bg-slate-100">
                 <Home className="h-5 w-5" />
               </Link>

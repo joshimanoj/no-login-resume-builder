@@ -185,8 +185,11 @@ test("a student builds a full CV, gets a review, improves it and downloads", asy
   await expect(page.locator("#resume-preview")).toContainText("Web Development Intern");
   await expect(page.getByRole("button", { name: "Download my CV" })).toBeEnabled();
 
-  // Past attempts are listed on the home page and open as submitted
+  // After submitting, Home is her CV; past attempts are on Curie's review tab and open as submitted
   await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(page).toHaveURL(/\/cv$/);
+  await expect(page.getByRole("link", { name: "Home", exact: true })).toHaveCount(0);
+  await page.getByRole("tab", { name: /Curie's review/ }).click();
   await expect(page.getByRole("link", { name: /Attempt 2/ })).toBeVisible();
   await page.getByRole("link", { name: /Attempt 1/ }).click();
   await expect(page.getByText("Needs another attempt", { exact: false })).toBeVisible();
@@ -515,4 +518,21 @@ test("after a review, 'Edit my CV' goes back into the questions, and she can sub
   await page.getByRole("button", { name: "Close" }).click();
   await tap(page, "Submit again");
   await expect(page.getByText("This is attempt 2 of 10.", { exact: false })).toBeVisible();
+});
+
+test("after submitting, signing out from her CV clears this phone for the next student", async ({ page }) => {
+  await page.goto("/demo?to=cv");
+  await expect(page).toHaveURL(/\/cv$/);
+  await tap(page, "Submit to Curie for review");
+  await page.getByRole("button", { name: /Continue with Google/ }).click();
+  await tap(page, "Submit to Curie");
+  await expect(page.getByText("Needs another attempt")).toBeVisible({ timeout: 15_000 });
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/cv$/);
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await tap(page, "Sign out");
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("button", { name: "Let's start without signing in" })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("guided-cv-v1") ?? "")).not.toContain("Asha");
 });

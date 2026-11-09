@@ -21,7 +21,6 @@ import {
   clearState,
   hasEnteredAnything,
   initialState,
-  isAccepted,
   isAcceptedAndUnchanged,
   isUnderReview,
   latestSubmission,
@@ -86,9 +85,9 @@ function ExampleCvPanel() {
 
 /**
  * Something worth coming back to: she has entered something (on this phone, or saved to her account
- * and opened on another phone), or submitted. The demo CV alone opens on the landing page.
+ * and opened on another phone). The demo CV alone opens on the landing page. (Once she has submitted, home is her CV.)
  */
-const hasStarted = (s: GuidedState) => s.submissions.length > 0 || ((Boolean(s.lastStep) || Boolean(s.user)) && hasEnteredAnything(s.data));
+const hasStarted = (s: GuidedState) => (Boolean(s.lastStep) || Boolean(s.user)) && hasEnteredAnything(s.data);
 
 export function Welcome() {
   const { state, update, goStep, signOut } = useGuided();
@@ -97,6 +96,8 @@ export function Welcome() {
   const google = useGoogleSignIn();
   const signInAndStart = () => google.start(stepPath(steps[0].key), () => goStep(steps[0].key));
 
+  // After her first submission, home is her CV and Curie's review.
+  if (state.submissions.length > 0) return <Navigate to="/cv" replace />;
   if (!hasStarted(state)) {
     return (
       <Screen back={false} aside={<ExampleCvPanel />}>
@@ -147,7 +148,6 @@ export function Welcome() {
     );
   }
 
-  const latest = latestSubmission(state);
   const stepKeys = new Set(steps.map((st) => st.key));
   const doneIds = new Set(SECTIONS.filter((d) => stepKeys.has(`${d.id}.check`) && sectionIssues(state, d.id).length === 0).map((d) => d.id));
   const resume = state.lastStep && steps.some((s) => s.key === state.lastStep) ? state.lastStep : steps[0].key;
@@ -173,18 +173,9 @@ export function Welcome() {
       <Question>
         <span className="mt-8 block text-[24px]">Welcome back{owner ? `, ${owner}` : ""}!</span>
       </Question>
-      {latest && !latest.review && <Hint className="text-[15px]">Curie is reviewing your CV.</Hint>}
-      {latest?.review && (
-        <Hint className="text-[15px]">
-          {latest.review.verdict === "accepted" ? "Your CV was accepted." : `Your review for attempt ${latest.attempt} is ready.`}
-        </Hint>
-      )}
-      {!latest && (
-        <Hint className="text-[15px]">
-          You've finished {doneIds.size} of {SECTIONS.length} sections.
-        </Hint>
-      )}
-      <AttemptHistory minimum={1} />
+      <Hint className="text-[15px]">
+        You've finished {doneIds.size} of {SECTIONS.length} sections.
+      </Hint>
       <h2 className="mt-6 text-sm font-semibold text-slate-600">Your sections</h2>
       <div className="mt-1 rounded-xl border border-slate-200 bg-white p-1">
         <SectionsList />
@@ -195,15 +186,9 @@ export function Welcome() {
         </p>
       )}
       <Actions>
-        {latest ? (
-          <BigButton tone="green" onClick={() => navigate(isAccepted(state) ? "/cv" : "/review")}>
-            {latest.review ? (isAccepted(state) ? "Go to my CV" : "See Curie's review") : "Check the status"}
-          </BigButton>
-        ) : (
-          <BigButton tone="green" onClick={() => goStep(resume)}>
-            {owner ? `Continue as ${owner}` : "Continue where I left off"}
-          </BigButton>
-        )}
+        <BigButton tone="green" onClick={() => goStep(resume)}>
+          {owner ? `Continue as ${owner}` : "Continue where I left off"}
+        </BigButton>
         {!state.user && (
           <BigButton tone="outline" className="mt-2.5" busy={google.busy} onClick={() => google.start("/", () => navigate("/"))}>
             <GoogleMark /> Sign in with Google to save it
@@ -300,7 +285,7 @@ export function YourCv() {
   const reviewLabel = !latest ? "" : reviewing ? "Curie is reviewing" : latest.review ? `Curie's review · ${latest.review.stars}★` : "Curie's review";
 
   return (
-    <Screen title="Your CV" back={false} wide>
+    <Screen title="Your CV" back={false} home={false} wide>
       {latest && (
         <div className="mt-1 grid grid-cols-2 gap-1 rounded-xl bg-slate-100 p-1" role="tablist" aria-label="Your CV and Curie's review">
           <button type="button" role="tab" aria-selected={tab === "cv"} onClick={() => setTab("cv")} className={tabClass(tab === "cv")}>
@@ -325,6 +310,7 @@ export function YourCv() {
       )}
 
       <EditCvSheet open={editing} onOpenChange={setEditing} />
+      <AccountLine />
       <Actions>
         <div className="space-y-2">
           {left <= 0 && !acceptedNow && <Hint className="text-center">You've used all {MAX_ATTEMPTS} attempts. Please talk to your VigyanShaala mentor.</Hint>}
@@ -348,6 +334,28 @@ export function YourCv() {
         </div>
       </Actions>
     </Screen>
+  );
+}
+
+/** Who this CV belongs to, and a way out: signing out clears this phone, so the next student starts fresh. */
+function AccountLine() {
+  const { state, signOut } = useGuided();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  if (!state.user) return null;
+  const out = async () => {
+    if (!window.confirm("Your CV is saved to your account. Sign out of this phone?")) return;
+    setBusy(true);
+    await signOut();
+    navigate("/", { replace: true });
+  };
+  return (
+    <p className="mt-5 text-center text-sm text-slate-500">
+      Signed in as {state.user.email}.{" "}
+      <button type="button" disabled={busy} onClick={out} className="min-h-8 font-medium text-primary underline disabled:opacity-50">
+        Sign out
+      </button>
+    </p>
   );
 }
 
