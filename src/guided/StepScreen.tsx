@@ -23,7 +23,7 @@ import {
 } from "./steps";
 import { sectionIssues } from "./checks";
 import { CvPreview } from "./screens";
-import { SECTION_ICONS, SectionsMenu } from "./sections";
+import { SECTION_ICONS, SectionsMenu, SoFar } from "./sections";
 import { PAGE_WIDTH } from "@/components/ScaledPreview";
 import { EXAMPLE_CV } from "./demo";
 import { paragraphToHtml } from "@/utils/plainText";
@@ -98,6 +98,8 @@ function TrackedStep({ step, bar, label }: { step: Step; bar: { total: number; c
   }, [editing, step.key, update]);
   return (
     <Screen sections={bar} label={label} onBack={onBack} aside={<LivePreview />} headerAction={<MyCvButton />}>
+      {/* What she has entered so far, kept in view; not when changing one answer from an overview. */}
+      {!editing && step.kind !== "intro" && step.kind !== "more" && step.kind !== "check" && <SoFar key={`so-far-${step.key}`} step={step} />}
       {/* key forces fresh local state per step */}
       <StepBody key={step.key} step={step} />
     </Screen>
@@ -142,15 +144,13 @@ function LookStrip() {
   );
 }
 
-/** Previous / next look, with anything (e.g. the look's name) between them. */
-function LookArrows({ children }: { children?: ReactNode }) {
+function LookArrows() {
   const { stepLook } = useCvPreview();
   return (
     <>
       <button type="button" aria-label="Previous look" onClick={() => stepLook(-1)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-primary hover:bg-slate-100">
         <ChevronLeft className="h-5 w-5" />
       </button>
-      {children}
       <button type="button" aria-label="Next look" onClick={() => stepLook(1)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-primary hover:bg-slate-100">
         <ChevronRight className="h-5 w-5" />
       </button>
@@ -217,13 +217,10 @@ function CvFullView({ onClose }: { onClose: () => void }) {
         <button type="button" autoFocus aria-label="Back" onClick={onClose} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-primary active:bg-slate-100">
           <ChevronLeft className="h-6 w-6" />
         </button>
-        <div className="flex min-w-0 flex-1 items-center justify-center">
-          <LookArrows>
-            <span className="min-w-0 truncate text-center text-sm font-medium" aria-live="polite">
-              {TEMPLATE_NAMES[id]}
-            </span>
-          </LookArrows>
-        </div>
+        {/* Just the look's name: the other looks are in the strip at the bottom. */}
+        <p className="min-w-0 flex-1 truncate text-center text-[15px] font-medium" aria-live="polite">
+          {TEMPLATE_NAMES[id]}
+        </p>
         <div className="flex shrink-0 items-center">
           <button type="button" aria-label="Zoom out" onClick={zoomOut} disabled={zoom === null} className={zoomButton}>
             <ZoomOut className="h-5 w-5" />
@@ -743,7 +740,6 @@ function DescribeStep({ step }: { step: StepOf<"describe"> }) {
 
   return (
     <>
-      <p className="text-sm font-medium text-primary">{itemLabel(sec, item)}</p>
       <Question>Describe it</Question>
       <Hint>A few points, one per box. Start each with an action word: made, built, taught, organised.</Hint>
       <div className="mt-4 space-y-2.5">

@@ -6,6 +6,7 @@ import {
   BookOpen,
   Briefcase,
   ChevronDown,
+  ChevronRight,
   FolderKanban,
   GraduationCap,
   Star,
@@ -15,6 +16,8 @@ import {
 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { SectionOverview } from "./overview";
+import { entryOf, itemLabel, sectionAnswers } from "./answers";
+import { buildSteps, isListSection, isPassedOver, items, type Step } from "./steps";
 import { useGuided } from "./GuidedContext";
 import { SECTIONS, sectionDef, sectionNumber, type SectionId } from "./state";
 import { STATUS_TEXT, sectionStatus, type SectionStatus } from "./checks";
@@ -93,14 +96,13 @@ export function SectionsMenu({ current, showAnswers = true }: { current: Section
       <Icon className="h-5 w-5 shrink-0" aria-hidden />
       <span className="min-w-0 flex-1">
         <span className="block truncate text-[15px] font-semibold leading-tight">{def.label}</span>
-        {showAnswers && <span className="block text-xs font-normal leading-tight text-[#3b6d11]">Tap to see your answers</span>}
       </span>
     </>
   );
   return (
     <div className="flex min-h-12 w-full items-center gap-2 rounded-xl bg-[#eaf5e4] pl-3 pr-2 text-[#1f3d12]">
       {showAnswers ? (
-        <button type="button" onClick={() => setOpen("answers")} className="flex min-h-12 min-w-0 flex-1 items-center gap-2 text-left">
+        <button type="button" aria-label={`${def.label}: see your answers`} onClick={() => setOpen("answers")} className="flex min-h-12 min-w-0 flex-1 items-center gap-2 text-left">
           {name}
         </button>
       ) : (
@@ -120,11 +122,7 @@ export function SectionsMenu({ current, showAnswers = true }: { current: Section
         <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-2xl border-none bg-white text-slate-800 md:mx-auto md:max-w-lg">
           {open === "answers" ? (
             <>
-              <SheetHeader>
-                <SheetTitle>Your {def.label} so far</SheetTitle>
-              </SheetHeader>
-              <p className="mt-1 text-sm text-slate-500">Tap an answer to change it. You'll come back to this question.</p>
-              <SectionOverview section={current} peek />
+              <AnswersSheetBody section={current} />
             </>
           ) : (
             <>
@@ -140,5 +138,63 @@ export function SectionsMenu({ current, showAnswers = true }: { current: Section
         </SheetContent>
       </Sheet>
     </div>
+  );
+}
+
+function AnswersSheetBody({ section }: { section: SectionId }) {
+  return (
+    <>
+      <SheetHeader>
+        <SheetTitle>Your {sectionDef(section).label} so far</SheetTitle>
+      </SheetHeader>
+      <p className="mt-1 text-sm text-slate-500">Tap an answer to change it. You'll come back to this question.</p>
+      <SectionOverview section={section} peek />
+    </>
+  );
+}
+
+/** Short answers that read well in one line (not yes/no, not long descriptions). */
+const glanceable = (v: string) => v !== "" && v !== "Yes" && v !== "No" && !v.includes("\n") && v.length <= 40;
+
+/**
+ * Above each question: what she has entered so far for this entry (or, starting a new one, the entries
+ * already added), so she keeps her bearings without hunting for it. "See all" opens every answer.
+ */
+export function SoFar({ step }: { step: Step }) {
+  const { state } = useGuided();
+  const [open, setOpen] = useState(false);
+  const entry = entryOf(step.key);
+  const groups = sectionAnswers(state, step.section);
+  const here = groups.find((g) => g.entry === entry);
+  const rows = (here?.rows ?? []).filter((r) => r.key !== step.key && glanceable(r.value));
+  // An answer set for her (e.g. "Job" from "Add a job") doesn't count as having started this entry.
+  const preset = new Set(buildSteps(state).filter((st) => isPassedOver(st, state)).map((st) => st.key));
+  const mine = rows.some((r) => !preset.has(r.key)) ? rows.map((r) => r.value) : [];
+  const list = isListSection(step.section) ? step.section : null;
+  const others = list ? items(state, list).filter((_, k) => `${list}.${k}` !== entry).map((it) => itemLabel(list, it)) : [];
+
+  const [label, text] = mine.length ? ["So far", mine.join(" · ")] : others.length ? ["Already added", others.join("; ")] : [null, ""];
+  if (!label) return null;
+
+  return (
+    // Laptops show the CV filling in beside the questions, so this is for phones and tablets.
+    <Sheet open={open} onOpenChange={setOpen}>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="mb-3 flex w-full lg:hidden items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-sm active:bg-slate-100"
+      >
+        <span className="min-w-0 flex-1 text-slate-700">
+          <span className="font-medium text-slate-500">{label}: </span>
+          <span className="line-clamp-2">{text}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-0.5 whitespace-nowrap font-medium text-primary">
+          See all <ChevronRight className="h-4 w-4" aria-hidden />
+        </span>
+      </button>
+      <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto rounded-t-2xl border-none bg-white text-slate-800 md:mx-auto md:max-w-lg">
+        <AnswersSheetBody section={step.section} />
+      </SheetContent>
+    </Sheet>
   );
 }

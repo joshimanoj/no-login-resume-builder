@@ -261,7 +261,7 @@ test.describe("on a laptop", () => {
     await expect(fullView).toBeVisible();
     const lookName = fullView.locator("[aria-live=polite]");
     await expect(lookName).toHaveText("Classic");
-    await fullView.getByRole("button", { name: "Next look" }).click();
+    await fullView.getByRole("radio", { name: "Shaded Headers" }).click();
     await expect(lookName).toHaveText("Shaded Headers");
     await fullView.getByRole("button", { name: "Back" }).click();
     await expect(fullView).toHaveCount(0);
@@ -292,8 +292,8 @@ test("on a phone, the CV opens from the top bar and peeks after each section", a
   await page.goto("/demo");
   await expect(page).toHaveURL(/\/$/);
   await page.goto("/s/experience.0.about");
-  // Describe it says which entry it's about.
-  await expect(page.getByText("Web Development Intern, Ankur Tech Solutions")).toBeVisible();
+  // Describe it shows which entry it's about: what she has entered so far.
+  await expect(page.getByRole("button", { name: /So far: Internship · Ankur Tech Solutions · Web Development Intern/ })).toBeVisible();
   await page.getByRole("button", { name: "Preview my CV" }).click();
   const fullView = page.getByRole("dialog", { name: "Your CV, full view" });
   await expect(fullView).toContainText("Web Development Intern");
@@ -414,7 +414,7 @@ test("from a question she can see her answers in the section, change one and com
   await page.goto("/demo");
   await expect(page).toHaveURL(/\/$/);
   await page.goto("/s/experience.0.about");
-  await page.getByText("Tap to see your answers").click();
+  await page.getByRole("button", { name: "Work Experience: see your answers" }).click();
   const sheet = page.getByRole("dialog");
   await expect(sheet.getByRole("heading", { name: "Your Work Experience so far" })).toBeVisible();
   await expect(sheet.getByRole("button", { name: "Delete", exact: false })).toHaveCount(0);
@@ -436,4 +436,19 @@ test("on a phone, looks are a swipeable carousel of full-size CVs", async ({ pag
   // Swiping works too.
   await page.locator(".snap-x").evaluate((el) => el.scrollTo({ left: 4 * el.clientWidth }));
   await expect(page.getByText("5 of 9 · swipe to see more")).toBeVisible();
+});
+
+test("each question shows what she has entered so far; starting a new entry, the ones already added", async ({ page }) => {
+  await page.goto("/demo");
+  await expect(page).toHaveURL(/\/$/);
+  await page.goto("/s/experience.0.start");
+  const soFar = page.getByRole("button", { name: /^So far:/ });
+  await expect(soFar).toContainText("Ankur Tech Solutions");
+  await soFar.click();
+  await expect(page.getByRole("heading", { name: "Your Work Experience so far" })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  await page.goto("/s/experience.more");
+  await tap(page, "Add a job");
+  await expect(page.getByRole("button", { name: /^Already added: Web Development Intern, Ankur Tech Solutions; Research Intern, IISER Pune/ })).toBeVisible();
 });

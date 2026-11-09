@@ -221,6 +221,8 @@ To request from the CURIE team:
   - Full CV view: one top bar like other screens (Back left, look name with arrows in the middle, zoom right).
   - Back on a question goes to the previous question in the flow, even after a trip Home.
   - The section name on the bar opens "Your <section> so far": every answer, tap to change, back to the same question.
+  - Above each question (phones and tablets), a "So far" card shows this entry's answers; starting a new entry, "Already added" lists the others (Vijay's context ask). "See all" opens every answer. Laptops have the live CV beside the questions instead.
+  - Full CV view: just the look's name in the bar; the strip at the bottom switches looks.
   - Work Experience asks "internship or job?" once: "Yes, an internship / Yes, a job", and "Add an internship / Add a job" for more.
   - Choose a look on phones: a swipeable carousel of full-size CVs (only neighbouring looks are drawn, for low-end phones).
 
