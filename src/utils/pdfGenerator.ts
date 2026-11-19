@@ -76,31 +76,33 @@ export function publishDownload(blob: Blob, filename: string, contentType: strin
   return { url, filename };
 }
 
-export const generatePDF = async (elementId: string, filename: string = 'resume.pdf'): Promise<ReadyDownload> => {
+export async function renderPDF(elementId: string): Promise<Blob> {
+  const previewOnlyElements = Array.from(document.querySelectorAll<HTMLElement>('.preview-only'));
+  const originalDisplays = previewOnlyElements.map((element) => element.style.display);
+  let html: string;
   try {
-    const previewOnlyElements = document.querySelectorAll('.preview-only');
-    const originalDisplays: string[] = [];
-    previewOnlyElements.forEach((el) => {
-      originalDisplays.push((el as HTMLElement).style.display);
-      (el as HTMLElement).style.display = 'none';
-    });
-    const html = getResumeHtml(elementId);
-    previewOnlyElements.forEach((el, index) => {
-      (el as HTMLElement).style.display = originalDisplays[index];
-    });
-    const response = await fetch('/api/generate-pdf', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ html }),
-    });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const blob = await response.blob();
-    return publishDownload(blob, filename, response.headers.get("content-type"));
-  } catch (error) {
-    console.error('Error generating PDF:', error);
-    throw error;
+    previewOnlyElements.forEach((element) => { element.style.display = 'none'; });
+    html = getResumeHtml(elementId);
+  } finally {
+    previewOnlyElements.forEach((element, index) => { element.style.display = originalDisplays[index]; });
   }
-};
+  const response = await fetch('/api/generate-pdf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ html }),
+  });
+  if (!response.ok) throw new Error('The resume PDF could not be generated.');
+  const blob = await response.blob();
+  if (!blob.size || !blob.type.includes('application/pdf')) {
+    throw new Error('The renderer did not return a PDF.');
+  }
+  return blob;
+}
+
+export async function generatePDF(elementId: string, filename = 'resume.pdf'): Promise<ReadyDownload> {
+  const blob = await renderPDF(elementId);
+  return publishDownload(blob, filename, blob.type);
+}
 
 export const generateWord = async (
   resumeData: ResumeData,

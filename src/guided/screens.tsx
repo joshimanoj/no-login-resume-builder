@@ -1,3 +1,4 @@
+import { clearTasReviewSession, readTasReviewSession, tasAssessmentEnabled } from "./tasAssessment";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, FileDown, LayoutTemplate, MessageSquareText, PenLine, Sparkles, type LucideIcon } from "lucide-react";
@@ -125,7 +126,7 @@ export function Welcome() {
           <BigButton tone="green" onClick={() => goStep(steps[0].key)}>
             {state.user ? "Let's start" : "Let's start without signing in"}
           </BigButton>
-          {state.user ? (
+          {!tasAssessmentEnabled && (state.user ? (
             <p className="mt-3 text-center text-sm text-slate-600">
               Signed in as {state.user.email}. Your CV is saved to your account.{" "}
               <button type="button" className="min-h-8 text-primary underline" onClick={signOut}>
@@ -142,7 +143,7 @@ export function Welcome() {
                 Optional. Sign in to continue on any phone or computer. You'll need to sign in when you submit your CV to Curie.
               </p>
             </>
-          )}
+          ))}
         </Actions>
       </Screen>
     );
@@ -161,6 +162,7 @@ export function Welcome() {
     if (!window.confirm(`${warning} Start a new CV?`)) return;
     if (state.user) await signOut();
     else {
+      if (tasAssessmentEnabled) clearTasReviewSession();
       clearState();
       update(initialState());
     }
@@ -180,7 +182,7 @@ export function Welcome() {
       <div className="mt-1 rounded-xl border border-slate-200 bg-white p-1">
         <SectionsList />
       </div>
-      {!state.user && (
+      {!tasAssessmentEnabled && !state.user && (
         <p className="mt-5 rounded-xl bg-[#eef3f8] px-3.5 py-3 text-sm text-primary">
           Using a shared phone? Sign in with Google so your CV is saved to your account, not just this phone.
         </p>
@@ -189,7 +191,7 @@ export function Welcome() {
         <BigButton tone="green" onClick={() => goStep(resume)}>
           {owner ? `Continue as ${owner}` : "Continue where I left off"}
         </BigButton>
-        {!state.user && (
+        {!tasAssessmentEnabled && !state.user && (
           <BigButton tone="outline" className="mt-2.5" busy={google.busy} onClick={() => google.start("/", () => navigate("/"))}>
             <GoogleMark /> Sign in with Google to save it
           </BigButton>
@@ -271,6 +273,9 @@ export function YourCv() {
   // The main button follows where she is.
   // The buttons below stay the same in every state; only this main one changes.
   const mainAction = (): { label: string; onClick: () => void; tone?: "green"; disabled?: boolean } | null => {
+    if (tasAssessmentEnabled && readTasReviewSession()) {
+      return { label: "View assessment status", onClick: () => navigate("/review"), tone: "green" };
+    }
     if (reviewing) return null;
     if (acceptedNow) return downloadReady ? { label: "Download my CV", onClick: download, tone: "green" } : null;
     if (failing) return { label: `Finish ${failing.label}`, onClick: () => goStep(firstStepOfSection(state, failing.id)) };

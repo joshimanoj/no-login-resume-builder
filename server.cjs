@@ -28,8 +28,44 @@ async function launchBrowser() {
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+const publicCors = cors();
+app.use((req, res, next) => req.path.startsWith('/api/tas-resume/') ? next() : publicCors(req, res, next));
 app.use(express.json({ limit: '50mb' }));
+
+// The TAS service credential stays on the server. The deployment selects its course block.
+const tasUrl = process.env.TAS_RESUME_BASE_URL;
+const tasSecret = process.env.TAS_RESUME_BUILDER_SECRET;
+const tasBlock = process.env.TAS_RESUME_BLOCK_ID;
+const tasConfigured = Boolean(tasUrl && tasSecret && /^[1-9][0-9]*$/.test(tasBlock || ''));
+
+const tasRoutes = {
+  lookup: () => `${tasBlock}/lookup/`,
+  submit: () => `${tasBlock}/submit/`,
+  status: () => 'status/',
+};
+
+app.post('/api/tas-resume/:operation', async (req, res) => {
+  const operation = req.params.operation;
+  if (!tasConfigured || !Object.hasOwn(tasRoutes, operation)) {
+    return res.status(404).json({ detail: 'Resume assessment is unavailable.' });
+  }
+  res.set('Cache-Control', 'no-store');
+  try {
+    const upstream = await fetch(`${tasUrl.replace(/\/$/, '')}/tas/api/v1/resume-builder/${tasRoutes[operation]()}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-TAS-Resume-Secret': tasSecret },
+      body: JSON.stringify(req.body),
+      signal: AbortSignal.timeout(30000),
+      redirect: 'error',
+    });
+    if (upstream.status >= 500) {
+      return res.status(502).json({ detail: 'TAS is temporarily unavailable. Please try again.' });
+    }
+    return res.status(upstream.status).json(await upstream.json());
+  } catch {
+    return res.status(502).json({ detail: 'TAS is temporarily unavailable. Please try again.' });
+  }
+});
 
 // Serve static files from dist directory
 app.use(express.static(path.join(__dirname, 'dist')));

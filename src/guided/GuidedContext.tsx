@@ -1,3 +1,4 @@
+import { tasAssessmentEnabled } from "./tasAssessment";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocation, useNavigate, type NavigateFunction } from "react-router-dom";
 import { clearState, hasEnteredAnything, initialState, loadState, saveState, type GuidedState } from "./state";
@@ -45,8 +46,11 @@ const contentChanged = (a: GuidedState, b: GuidedState) => SYNCED.some((k) => a[
 const syncedJson = (s: GuidedState) => JSON.stringify(SYNCED.map((k) => s[k]));
 
 export function GuidedProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<GuidedState>(loadState);
-  const [authReady, setAuthReady] = useState(usingMock);
+  const [state, setState] = useState<GuidedState>(() => {
+    const saved = loadState();
+    return tasAssessmentEnabled ? { ...saved, user: null, submissions: [] } : saved;
+  });
+  const [authReady, setAuthReady] = useState(() => tasAssessmentEnabled || usingMock());
   const stateRef = useRef(state);
   const loadedFor = useRef<string | null>(null);
   const lastPushed = useRef<string | null>(null);
@@ -68,7 +72,7 @@ export function GuidedProvider({ children }: { children: ReactNode }) {
   // When she signs in, bring in her saved CV and submissions. The newer CV wins between this phone and her account.
   useEffect(
     () =>
-      watchUser(async (user) => {
+      tasAssessmentEnabled ? undefined : watchUser(async (user) => {
         if (!user) {
           if (stateRef.current.user) update((s) => ({ ...s, user: null }));
           loadedFor.current = null;
@@ -98,7 +102,7 @@ export function GuidedProvider({ children }: { children: ReactNode }) {
   // Save her CV to her account a moment after each change.
   useEffect(() => {
     const user = state.user;
-    if (!user || usingMock() || loadedFor.current !== user.id) return;
+    if (tasAssessmentEnabled || !user || usingMock() || loadedFor.current !== user.id) return;
     // An empty CV is never saved over her account copy (e.g. this phone was cleared).
     if (!hasEnteredAnything(state.data)) return;
     const payload = syncedJson(state);

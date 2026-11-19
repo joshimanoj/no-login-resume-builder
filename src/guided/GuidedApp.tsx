@@ -1,3 +1,5 @@
+import { TasCourseAssessment } from "./TasCourseAssessment";
+import { clearTasReviewSession, tasAssessmentEnabled } from "./tasAssessment";
 import { useEffect } from "react";
 import { Navigate, Route, Routes, useSearchParams } from "react-router-dom";
 import { GuidedProvider } from "./GuidedContext";
@@ -47,9 +49,9 @@ function GuidedRoutes() {
       <Route path="cv" element={<YourCv />} />
       <Route path="edit" element={<EditEverything />} />
       <Route path="edit/:section" element={<EditSection />} />
-      <Route path="signin" element={<SignIn />} />
-      <Route path="submit" element={<Submit />} />
-      <Route path="review" element={<ReviewScreen />} />
+      <Route path="signin" element={tasAssessmentEnabled ? <Navigate to="/" replace /> : <SignIn />} />
+      <Route path="submit" element={tasAssessmentEnabled ? <TasCourseAssessment /> : <Submit />} />
+      <Route path="review" element={tasAssessmentEnabled ? <TasCourseAssessment /> : <ReviewScreen />} />
       <Route path="improve/:section" element={<Improve />} />
       <Route path="look" element={<LookPicker />} />
       <Route path="photo" element={<PhotoStep />} />
@@ -92,7 +94,8 @@ function FreshStart() {
   useEffect(() => {
     void (async () => {
       // Sign out properly first, so the sign-in can't be written back while this page is open.
-      await signOut("local").catch(() => undefined);
+      if (tasAssessmentEnabled) clearTasReviewSession();
+      else await signOut("local").catch(() => undefined);
       clearState();
       try {
         // Supabase keeps the sign-in under "sb-..." keys; removing them signs this browser out.
