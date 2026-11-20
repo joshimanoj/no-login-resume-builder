@@ -18,8 +18,10 @@ export function Screen({
   wide,
   aside,
   headerAction,
+  compact = false,
 }: {
   children: ReactNode;
+  compact?: boolean;
   progress?: number;
   /** Segmented bar: one segment per section; the current one fills as she answers its questions. */
   sections?: { total: number; current: number; within: number };
@@ -47,8 +49,9 @@ export function Screen({
       <div className="md:flex md:items-start md:justify-center md:gap-6 md:px-6 md:py-8">
       <div
         className={cn(
-          "mx-auto flex min-h-[100dvh] max-w-md flex-col px-5 pt-3",
-          "md:mx-0 md:min-h-[calc(100dvh-7.5rem)] md:w-full md:rounded-2xl md:border md:border-slate-200 md:bg-white md:px-8 md:pt-6 md:shadow-sm",
+          "mx-auto flex max-w-md flex-col px-5 pt-3",
+          compact ? "pb-6 md:pb-8" : "min-h-[100dvh] md:min-h-[calc(100dvh-7.5rem)]",
+          "md:mx-0 md:w-full md:rounded-2xl md:border md:border-slate-200 md:bg-white md:px-8 md:pt-6 md:shadow-sm",
           wide ? "md:max-w-2xl" : "md:max-w-[480px]",
         )}
       >

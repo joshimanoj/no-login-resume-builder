@@ -1,3 +1,4 @@
+import { Loader2, Mail, UserRound } from "lucide-react";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ResumePreview } from "@/components/ResumePreview";
@@ -6,8 +7,8 @@ import { renderPDF } from "@/utils/pdfGenerator";
 import { useGuided } from "./GuidedContext";
 import { clearState, initialState } from "./state";
 import { allSectionsPass } from "./checks";
-import { Actions, BigButton, Hint, Question, Screen } from "./ui";
-import { clearTasReviewSession, encodePDF, readTasReviewSession, tasRequest, TAS_REVIEW_SESSION_KEY } from "./tasAssessment";
+import { BigButton, CurieAvatar, Hint, Question, Screen } from "./ui";
+import { clearTasReviewSession, encodePDF, readTasReviewSession, reviewLink, reviewTokenFromLink, saveTasReviewSession, tasRequest, TasRequestError } from "./tasAssessment";
 
 type Account = { name: string; confirmation: string };
 type Receipt = { status_token: string };
@@ -37,17 +38,26 @@ const headings: Record<string, string> = {
 };
 const message = (error: unknown) => error instanceof Error ? error.message : "TAS is temporarily unavailable.";
 
-export function TasCourseAssessment() {
+export function TasCourseAssessment({ reviewOnly = false }: { reviewOnly?: boolean }) {
   const { state, update } = useGuided();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [account, setAccount] = useState<Account | null>(null);
-  const [token, setToken] = useState(readTasReviewSession);
+  const [token, setToken] = useState(() => reviewTokenFromLink(window.location.href) ?? readTasReviewSession());
+  const [pastedLink, setPastedLink] = useState("");
+  const [copyMessage, setCopyMessage] = useState("");
   const [review, setReview] = useState<Review | null>(null);
   const [busy, setBusy] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
   const submission = useRef<{ idempotency_key: string; resume: ResumeData; pdf_base64: string }>();
   const previewData = applyTitleCaseName(state.data);
+
+  useEffect(() => {
+    if (!reviewTokenFromLink(window.location.href)) return;
+    if (token) saveTasReviewSession(token);
+    window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
+  }, [token]);
 
   useEffect(() => {
     if (!token || review?.status === "failed" || (review?.status === "ready" && review.verdict)) return;
@@ -62,13 +72,21 @@ export function TasCourseAssessment() {
         if (next.status === "failed" || (next.status === "ready" && next.verdict)) return;
       } catch (err) {
         if (!active) return;
+        if (err instanceof TasRequestError && (err.status === 403 || err.status === 404)) {
+          clearTasReviewSession();
+          setToken(null);
+          setReview(null);
+          setError("This review link is invalid or has expired.");
+          navigate("/review", { replace: true });
+          return;
+        }
         setError(message(err));
       }
       timer = setTimeout(poll, 5000);
     }
     void poll();
     return () => { active = false; clearTimeout(timer); };
-  }, [token, review?.status, review?.verdict]);
+  }, [navigate, token, review?.status, review?.verdict]);
 
   function clearReview() {
     clearTasReviewSession();
@@ -94,9 +112,27 @@ export function TasCourseAssessment() {
     }
   }
 
+  async function recover() {
+    if (!account || busy) return;
+    setBusy(true);
+    setProcessing(true);
+    setError("");
+    try {
+      const receipt = await tasRequest<Receipt>("recover", { confirmation: account.confirmation, confirmed: true });
+      saveTasReviewSession(receipt.status_token);
+      setToken(receipt.status_token);
+    } catch (err) {
+      setError(message(err));
+    } finally {
+      setBusy(false);
+      setProcessing(false);
+    }
+  }
+
   async function submit() {
     if (!account || busy) return;
     setBusy(true);
+    setProcessing(true);
     setError("");
     try {
       if (!submission.current) {
@@ -109,12 +145,25 @@ export function TasCourseAssessment() {
         ...submission.current, confirmation: account.confirmation, confirmed: true,
       });
       setToken(receipt.status_token);
-      try { sessionStorage.setItem(TAS_REVIEW_SESSION_KEY, receipt.status_token); } catch { /* storage unavailable */ }
+      saveTasReviewSession(receipt.status_token);
     } catch (err) {
       setError(message(err));
     } finally {
       setBusy(false);
+      setProcessing(false);
     }
+  }
+
+  function openReview(event: FormEvent) {
+    event.preventDefault();
+    const saved = reviewTokenFromLink(pastedLink.trim());
+    if (!saved) {
+      setError("Paste the review link you saved from this site.");
+      return;
+    }
+    setError("");
+    saveTasReviewSession(saved);
+    setToken(saved);
   }
 
   if (token) {
@@ -123,10 +172,35 @@ export function TasCourseAssessment() {
       : review?.status === "failed" ? "Review unavailable" : review?.awaiting_instructor_approval
         ? "Awaiting instructor approval" : "Review in progress";
     return (
-      <Screen back={false}>
-        <Question>{heading}</Question>
-        {error && <p role="alert">{error}</p>}
-        {review?.status === "failed" && <Hint>Your resume was saved. You can try the review again.</Hint>}
+      <Screen back={false} title="CV review" compact>
+        <section className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-5" aria-live="polite">
+          <CurieAvatar size={44} />
+          <Question>{heading}</Question>
+          {review?.awaiting_instructor_approval ? (
+            <Hint>Curie has completed its review. Your instructor is checking it before it is shared with you. This page will update automatically when your feedback is available.</Hint>
+          ) : !review?.verdict && review?.status !== "failed" ? (
+            <Hint>Curie is reviewing your submission. This page will update automatically.</Hint>
+          ) : null}
+          {review?.status === "failed" && <Hint>Your resume was saved. You can try the review again.</Hint>}
+        </section>
+        <p className="my-4 text-sm text-slate-600">To return later, choose <strong>Check my review</strong> on the homepage and enter your registered email.</p>
+        <details className="mb-4 rounded-xl border border-slate-200 px-3 py-2">
+          <summary className="cursor-pointer text-sm font-medium text-primary">Save a private review link</summary>
+          <Hint>The link works for seven days.</Hint>
+          <label className="mt-3 block text-sm font-medium" htmlFor="tas-review-link">Your review link</label>
+          <input id="tas-review-link" className="mt-1 w-full rounded-md border p-2 text-sm" readOnly
+            value={reviewLink(token)} onFocus={(event) => event.currentTarget.select()} />
+          <button type="button" className="mt-2 text-primary underline" onClick={async () => {
+            try {
+              await navigator.clipboard.writeText(reviewLink(token));
+              setCopyMessage("Review link copied.");
+            } catch {
+              setCopyMessage("Select and copy the review link above.");
+            }
+          }}>Copy review link</button>
+          <p className="mt-1 text-sm" role="status">{copyMessage}</p>
+        </details>
+        {error && <p className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p>}
         {review?.verdict && (
           <>
             {review.star_rating != null && <p>{review.star_rating} out of 5 stars</p>}
@@ -139,45 +213,86 @@ export function TasCourseAssessment() {
             ))}
           </>
         )}
-        <Actions>
+        <div className="mt-2 grid gap-2">
           {retry && <BigButton onClick={() => { clearReview(); navigate("/cv"); }}>Back to my CV</BigButton>}
-          <BigButton tone="outline" onClick={() => { clearReview(); clearState(); update(initialState()); navigate("/"); }}>
-            Finish and clear this device
+          <BigButton tone={retry ? "outline" : "primary"} onClick={() => { clearReview(); clearState(); update(initialState()); navigate("/"); }}>
+            Finish
           </BigButton>
-        </Actions>
+        </div>
       </Screen>
     );
   }
 
-  if (!allSectionsPass(state)) {
-    return <Screen><Question>Finish your CV first</Question><Link to="/cv">Back to my CV</Link></Screen>;
+  if (!reviewOnly && !allSectionsPass(state)) {
+    return <Screen compact><Question>Finish your CV first</Question><Link className="mt-3 text-primary underline" to="/cv">Back to my CV</Link></Screen>;
   }
 
   return (
-    <Screen>
-      <Question>{account ? "Confirm your account" : "Submit your CV for assessment"}</Question>
-      <div className="hidden" aria-hidden="true">
-        <div id="tas-submitted-resume"><ResumePreview resumeData={previewData} template={state.template} /></div>
-      </div>
-      {account ? (
+    <Screen compact back={!processing} home={!processing}>
+      {!reviewOnly && (
+        <div className="hidden" aria-hidden="true">
+          <div id="tas-submitted-resume"><ResumePreview resumeData={previewData} template={state.template} /></div>
+        </div>
+      )}
+      {processing ? (
+        <div className="flex min-h-64 flex-col items-center justify-center px-4 py-10 text-center" role="status">
+          <span className="mb-4 flex size-14 items-center justify-center rounded-full bg-slate-100 text-primary">
+            <Loader2 className="size-7 motion-safe:animate-spin" aria-hidden />
+          </span>
+          <Question>{reviewOnly ? "Opening your review" : "Submitting your CV"}</Question>
+          <Hint>{reviewOnly ? "We’re checking your latest review status." : "We’re preparing your PDF and saving your CV."}</Hint>
+        </div>
+      ) : account ? (
         <>
-          <Hint>Submit as {account.name}?</Hint>
-          <Actions>
-            <BigButton tone="green" busy={busy} onClick={submit}>Confirm and submit</BigButton>
-            <BigButton tone="outline" disabled={busy} onClick={() => { setAccount(null); submission.current = undefined; setError(""); }}>Use a different email</BigButton>
-          </Actions>
+          <Question>Confirm your account</Question>
+          <Hint>{reviewOnly ? "We’ll open the latest review for this account." : "We’ll submit your CV under this account."}</Hint>
+          <div className="my-5 flex min-w-0 items-start gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-white text-primary">
+              <UserRound className="size-5" aria-hidden />
+            </span>
+            <div className="min-w-0">
+              <p className="break-words text-xl font-semibold leading-tight text-slate-900">{account.name}</p>
+              <p className="mt-1 break-all text-base text-slate-700">{email.trim()}</p>
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <BigButton tone="green" onClick={reviewOnly ? recover : submit}>
+              {reviewOnly ? "Confirm and view review" : "Confirm and submit"}
+            </BigButton>
+            <BigButton tone="outline" onClick={() => { setAccount(null); submission.current = undefined; setError(""); }}>
+              Use a different email
+            </BigButton>
+          </div>
         </>
       ) : (
-        <form onSubmit={lookup} className="mt-4">
-          <label className="block mb-2" htmlFor="tas-email">Registered VigyanShaala email</label>
-          <input className="w-full rounded-md border p-3" id="tas-email" type="email" autoComplete="off"
-            value={email} onChange={(event) => setEmail(event.target.value)} required />
-          <button className="mt-4 rounded-md bg-secondary px-4 py-3 text-white" disabled={busy} type="submit">
-            {busy ? "Looking up…" : "Find my account"}
-          </button>
-        </form>
+        <>
+          <Question>{reviewOnly ? "Check my review" : "Submit your CV for assessment"}</Question>
+          <Hint>Enter the email you used to register with VigyanShaala.</Hint>
+          <form onSubmit={lookup} className="mt-5">
+            <label className="mb-2 block text-sm font-semibold" htmlFor="tas-registered-email">Registered VigyanShaala email</label>
+            <div className="relative">
+              <Mail className="pointer-events-none absolute left-3 top-4 size-5 text-slate-500" aria-hidden />
+              <input id="tas-registered-email" className="min-h-[52px] w-full rounded-xl border border-slate-300 py-3 pl-11 pr-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                type="email" autoComplete="off" value={email} onChange={(event) => setEmail(event.target.value)} required />
+            </div>
+            <BigButton type="submit" tone="green" className="mt-4" busy={busy}>
+              {busy ? "Looking up…" : "Find my account"}
+            </BigButton>
+          </form>
+          {reviewOnly && (
+            <details className="mt-5">
+              <summary className="cursor-pointer text-primary">Use a saved review link</summary>
+              <form onSubmit={openReview} className="mt-3">
+                <label className="mb-2 block" htmlFor="tas-saved-review-link">Saved review link</label>
+                <input id="tas-saved-review-link" className="w-full rounded-md border p-3" type="url" required
+                  value={pastedLink} onChange={(event) => setPastedLink(event.target.value)} />
+                <button className="mt-4 rounded-md bg-secondary px-4 py-3 text-white" type="submit">Open review</button>
+              </form>
+            </details>
+          )}
+        </>
       )}
-      {error && <p className="mt-3" role="alert">{error}</p>}
+      {error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p>}
     </Screen>
   );
 }

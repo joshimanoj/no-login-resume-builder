@@ -40,6 +40,7 @@ const tasConfigured = Boolean(tasUrl && tasSecret && /^[1-9][0-9]*$/.test(tasBlo
 
 const tasRoutes = {
   lookup: () => `${tasBlock}/lookup/`,
+  recover: () => `${tasBlock}/recover/`,
   submit: () => `${tasBlock}/submit/`,
   status: () => 'status/',
 };

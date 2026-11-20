@@ -51,7 +51,7 @@ function GuidedRoutes() {
       <Route path="edit/:section" element={<EditSection />} />
       <Route path="signin" element={tasAssessmentEnabled ? <Navigate to="/" replace /> : <SignIn />} />
       <Route path="submit" element={tasAssessmentEnabled ? <TasCourseAssessment /> : <Submit />} />
-      <Route path="review" element={tasAssessmentEnabled ? <TasCourseAssessment /> : <ReviewScreen />} />
+      <Route path="review" element={tasAssessmentEnabled ? <TasCourseAssessment reviewOnly /> : <ReviewScreen />} />
       <Route path="improve/:section" element={<Improve />} />
       <Route path="look" element={<LookPicker />} />
       <Route path="photo" element={<PhotoStep />} />

@@ -126,6 +126,7 @@ export function Welcome() {
           <BigButton tone="green" onClick={() => goStep(steps[0].key)}>
             {state.user ? "Let's start" : "Let's start without signing in"}
           </BigButton>
+          {tasAssessmentEnabled && <LinkButton onClick={() => navigate("/review")}>Check my review</LinkButton>}
           {!tasAssessmentEnabled && (state.user ? (
             <p className="mt-3 text-center text-sm text-slate-600">
               Signed in as {state.user.email}. Your CV is saved to your account.{" "}
@@ -197,6 +198,7 @@ export function Welcome() {
           </BigButton>
         )}
         {google.error && <p className="mt-2 text-center text-sm text-[#854F0B]">{google.error}</p>}
+        {tasAssessmentEnabled && <LinkButton onClick={() => navigate("/review")}>Check my review</LinkButton>}
         <LinkButton onClick={notMe}>{owner ? `I'm not ${owner}: start a new CV` : "Start a new CV"}</LinkButton>
       </Actions>
     </Screen>

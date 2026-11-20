@@ -1,7 +1,37 @@
 export const tasAssessmentEnabled = import.meta.env.VITE_TAS_RESUME_ASSESSMENT === "1";
 export const TAS_REVIEW_SESSION_KEY = "tas-resume-review";
 
-export async function tasRequest<T>(operation: "lookup" | "submit" | "status", body: object): Promise<T> {
+export class TasRequestError extends Error {
+  constructor(message: string, readonly status: number) {
+    super(message);
+  }
+}
+
+export function reviewLink(token: string): string {
+  const url = new URL("/review", window.location.origin);
+  url.hash = new URLSearchParams({ review: token }).toString();
+  return url.href;
+}
+
+export function reviewTokenFromLink(link: string): string | null {
+  try {
+    const url = new URL(link);
+    if (url.origin !== window.location.origin || url.pathname !== "/review") return null;
+    return new URLSearchParams(url.hash.slice(1)).get("review") || null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveTasReviewSession(token: string) {
+  try {
+    sessionStorage.setItem(TAS_REVIEW_SESSION_KEY, token);
+  } catch {
+    // A saved review link still works when storage is unavailable.
+  }
+}
+
+export async function tasRequest<T>(operation: "lookup" | "recover" | "submit" | "status", body: object): Promise<T> {
   const response = await fetch(`/api/tas-resume/${operation}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -9,7 +39,7 @@ export async function tasRequest<T>(operation: "lookup" | "submit" | "status", b
   });
   const data = await response.json();
   if (!response.ok) {
-    throw new Error(typeof data.detail === "string" ? data.detail : "TAS could not process the request.");
+    throw new TasRequestError(typeof data.detail === "string" ? data.detail : "TAS could not process the request.", response.status);
   }
   return data as T;
 }
