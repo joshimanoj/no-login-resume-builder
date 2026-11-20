@@ -8,7 +8,7 @@ import { useGuided } from "./GuidedContext";
 import { clearState, initialState } from "./state";
 import { allSectionsPass } from "./checks";
 import { BigButton, CurieAvatar, Hint, Question, Screen } from "./ui";
-import { clearTasReviewSession, encodePDF, readTasReviewSession, reviewLink, reviewTokenFromLink, saveTasReviewSession, tasRequest, TasRequestError } from "./tasAssessment";
+import { clearTasReviewSession, encodePDF, readTasReviewSession, saveTasReviewSession, tasRequest, TasRequestError } from "./tasAssessment";
 
 type Account = { name: string; confirmation: string };
 type Receipt = { status_token: string };
@@ -43,21 +43,13 @@ export function TasCourseAssessment({ reviewOnly = false }: { reviewOnly?: boole
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [account, setAccount] = useState<Account | null>(null);
-  const [token, setToken] = useState(() => reviewTokenFromLink(window.location.href) ?? readTasReviewSession());
-  const [pastedLink, setPastedLink] = useState("");
-  const [copyMessage, setCopyMessage] = useState("");
+  const [token, setToken] = useState(readTasReviewSession);
   const [review, setReview] = useState<Review | null>(null);
   const [busy, setBusy] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState("");
   const submission = useRef<{ idempotency_key: string; resume: ResumeData; pdf_base64: string }>();
   const previewData = applyTitleCaseName(state.data);
-
-  useEffect(() => {
-    if (!reviewTokenFromLink(window.location.href)) return;
-    if (token) saveTasReviewSession(token);
-    window.history.replaceState(window.history.state, "", window.location.pathname + window.location.search);
-  }, [token]);
 
   useEffect(() => {
     if (!token || review?.status === "failed" || (review?.status === "ready" && review.verdict)) return;
@@ -76,7 +68,7 @@ export function TasCourseAssessment({ reviewOnly = false }: { reviewOnly?: boole
           clearTasReviewSession();
           setToken(null);
           setReview(null);
-          setError("This review link is invalid or has expired.");
+          setError("Your review session expired. Enter your registered email to reopen it.");
           navigate("/review", { replace: true });
           return;
         }
@@ -154,18 +146,6 @@ export function TasCourseAssessment({ reviewOnly = false }: { reviewOnly?: boole
     }
   }
 
-  function openReview(event: FormEvent) {
-    event.preventDefault();
-    const saved = reviewTokenFromLink(pastedLink.trim());
-    if (!saved) {
-      setError("Paste the review link you saved from this site.");
-      return;
-    }
-    setError("");
-    saveTasReviewSession(saved);
-    setToken(saved);
-  }
-
   if (token) {
     const retry = review?.status === "failed" || review?.verdict === "rejected";
     const heading = review?.verdict === "accepted" ? "Accepted" : review?.verdict === "rejected" ? "Reattempt requested"
@@ -184,22 +164,6 @@ export function TasCourseAssessment({ reviewOnly = false }: { reviewOnly?: boole
           {review?.status === "failed" && <Hint>Your resume was saved. You can try the review again.</Hint>}
         </section>
         <p className="my-4 text-sm text-slate-600">To return later, choose <strong>Check my review</strong> on the homepage and enter your registered email.</p>
-        <details className="mb-4 rounded-xl border border-slate-200 px-3 py-2">
-          <summary className="cursor-pointer text-sm font-medium text-primary">Save a private review link</summary>
-          <Hint>The link works for seven days.</Hint>
-          <label className="mt-3 block text-sm font-medium" htmlFor="tas-review-link">Your review link</label>
-          <input id="tas-review-link" className="mt-1 w-full rounded-md border p-2 text-sm" readOnly
-            value={reviewLink(token)} onFocus={(event) => event.currentTarget.select()} />
-          <button type="button" className="mt-2 text-primary underline" onClick={async () => {
-            try {
-              await navigator.clipboard.writeText(reviewLink(token));
-              setCopyMessage("Review link copied.");
-            } catch {
-              setCopyMessage("Select and copy the review link above.");
-            }
-          }}>Copy review link</button>
-          <p className="mt-1 text-sm" role="status">{copyMessage}</p>
-        </details>
         {error && <p className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p>}
         {review?.verdict && (
           <>
@@ -279,17 +243,6 @@ export function TasCourseAssessment({ reviewOnly = false }: { reviewOnly?: boole
               {busy ? "Looking up…" : "Find my account"}
             </BigButton>
           </form>
-          {reviewOnly && (
-            <details className="mt-5">
-              <summary className="cursor-pointer text-primary">Use a saved review link</summary>
-              <form onSubmit={openReview} className="mt-3">
-                <label className="mb-2 block" htmlFor="tas-saved-review-link">Saved review link</label>
-                <input id="tas-saved-review-link" className="w-full rounded-md border p-3" type="url" required
-                  value={pastedLink} onChange={(event) => setPastedLink(event.target.value)} />
-                <button className="mt-4 rounded-md bg-secondary px-4 py-3 text-white" type="submit">Open review</button>
-              </form>
-            </details>
-          )}
         </>
       )}
       {error && <p className="mt-4 rounded-xl bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p>}

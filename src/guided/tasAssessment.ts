@@ -7,22 +7,6 @@ export class TasRequestError extends Error {
   }
 }
 
-export function reviewLink(token: string): string {
-  const url = new URL("/review", window.location.origin);
-  url.hash = new URLSearchParams({ review: token }).toString();
-  return url.href;
-}
-
-export function reviewTokenFromLink(link: string): string | null {
-  try {
-    const url = new URL(link);
-    if (url.origin !== window.location.origin || url.pathname !== "/review") return null;
-    return new URLSearchParams(url.hash.slice(1)).get("review") || null;
-  } catch {
-    return null;
-  }
-}
-
 export function saveTasReviewSession(token: string) {
   try {
     sessionStorage.setItem(TAS_REVIEW_SESSION_KEY, token);
