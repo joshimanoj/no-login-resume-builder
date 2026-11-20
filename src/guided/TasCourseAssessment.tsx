@@ -7,7 +7,7 @@ import { renderPDF } from "@/utils/pdfGenerator";
 import { useGuided } from "./GuidedContext";
 import { clearState, initialState } from "./state";
 import { allSectionsPass } from "./checks";
-import { BigButton, CurieAvatar, Hint, Question, Screen } from "./ui";
+import { Actions, BigButton, CurieAvatar, Hint, Question, Screen } from "./ui";
 import { clearTasReviewSession, encodePDF, readTasReviewSession, saveTasReviewSession, tasRequest, TasRequestError } from "./tasAssessment";
 
 type Account = { name: string; confirmation: string };
@@ -153,7 +153,7 @@ export function TasCourseAssessment({ reviewOnly = false }: { reviewOnly?: boole
         ? "Awaiting instructor approval" : "Review in progress";
     return (
       <Screen back={false} title="CV review" compact>
-        <section className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-5" aria-live="polite">
+        <section className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 sm:p-5" aria-live="polite">
           <CurieAvatar size={44} />
           <Question>{heading}</Question>
           {review?.awaiting_instructor_approval ? (
@@ -166,23 +166,25 @@ export function TasCourseAssessment({ reviewOnly = false }: { reviewOnly?: boole
         <p className="my-4 text-sm text-slate-600">To return later, choose <strong>Check my review</strong> on the homepage and enter your registered email.</p>
         {error && <p className="mb-3 rounded-xl bg-red-50 p-3 text-sm text-red-800" role="alert">{error}</p>}
         {review?.verdict && (
-          <>
-            {review.star_rating != null && <p>{review.star_rating} out of 5 stars</p>}
-            <p className="my-4 whitespace-pre-wrap">{review.overall_feedback}</p>
+          <div className="mb-5 min-w-0 space-y-3">
+            {review.star_rating != null && <p className="font-semibold text-primary">{review.star_rating} out of 5 stars</p>}
+            {review.overall_feedback && <p className="whitespace-pre-wrap text-sm leading-relaxed [overflow-wrap:anywhere]">{review.overall_feedback}</p>}
             {review.field_feedback?.map((row) => (
-              <section className="my-3" key={row.field_id}>
-                <h2 className="font-semibold">{headings[row.field_id] ?? row.field_id}</h2>
-                <p className="whitespace-pre-wrap">{row.comment}</p>
+              <section className="rounded-xl border border-slate-200 p-3 sm:p-4" key={row.field_id}>
+                <h2 className="font-semibold [overflow-wrap:anywhere]">{headings[row.field_id] ?? row.field_id}</h2>
+                <p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed text-slate-700 [overflow-wrap:anywhere]">{row.comment}</p>
               </section>
             ))}
-          </>
+          </div>
         )}
-        <div className="mt-2 grid gap-2">
-          {retry && <BigButton onClick={() => { clearReview(); navigate("/cv"); }}>Back to my CV</BigButton>}
-          <BigButton tone={retry ? "outline" : "primary"} onClick={() => { clearReview(); clearState(); update(initialState()); navigate("/"); }}>
-            Finish
-          </BigButton>
-        </div>
+        <Actions>
+          <div className="grid grid-cols-1 gap-2 min-[480px]:grid-flow-col min-[480px]:auto-cols-fr">
+            {retry && <BigButton onClick={() => { clearReview(); navigate("/cv"); }}>Back to my CV</BigButton>}
+            <BigButton tone={retry ? "outline" : "primary"} onClick={() => { clearReview(); clearState(); update(initialState()); navigate("/"); }}>
+              Finish
+            </BigButton>
+          </div>
+        </Actions>
       </Screen>
     );
   }
@@ -215,8 +217,8 @@ export function TasCourseAssessment({ reviewOnly = false }: { reviewOnly?: boole
               <UserRound className="size-5" aria-hidden />
             </span>
             <div className="min-w-0">
-              <p className="break-words text-xl font-semibold leading-tight text-slate-900">{account.name}</p>
-              <p className="mt-1 break-all text-base text-slate-700">{email.trim()}</p>
+              <p className="text-xl font-semibold leading-tight text-slate-900 [overflow-wrap:anywhere]">{account.name}</p>
+              <p className="mt-1 text-base text-slate-700 [overflow-wrap:anywhere]">{email.trim()}</p>
             </div>
           </div>
           <div className="grid gap-2">
@@ -237,7 +239,8 @@ export function TasCourseAssessment({ reviewOnly = false }: { reviewOnly?: boole
             <div className="relative">
               <Mail className="pointer-events-none absolute left-3 top-4 size-5 text-slate-500" aria-hidden />
               <input id="tas-registered-email" className="min-h-[52px] w-full rounded-xl border border-slate-300 py-3 pl-11 pr-3 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                type="email" autoComplete="off" value={email} onChange={(event) => setEmail(event.target.value)} required />
+                type="email" inputMode="email" autoComplete="off" autoCapitalize="none" spellCheck={false}
+                value={email} onChange={(event) => setEmail(event.target.value)} readOnly={busy} required />
             </div>
             <BigButton type="submit" tone="green" className="mt-4" busy={busy}>
               {busy ? "Looking up…" : "Find my account"}
